@@ -95,6 +95,7 @@
 			</intent-filter>
 		</activity>
 		<service android:name=".service.PlayerService"></service>
+        <service android:name=".service.RadioPlayerService"></service>
 		<service android:name=".service.DownloadService"></service>
 		<activity android:name=".activity.IntentDistributorActivity">
 					<intent-filter>
@@ -154,6 +155,11 @@
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN"></action>
 				<category android:name="android.intent.category.LAUNCHER"></category>
+			</intent-filter>
+		</activity>
+		<activity android:name=".activity.RadioPlayerActivity">
+			<intent-filter>
+				<action android:name="android.intent.action.VIEW"/>
 			</intent-filter>
 		</activity>
 	</application>

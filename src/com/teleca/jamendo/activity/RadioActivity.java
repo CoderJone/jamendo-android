@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Teleca Poland Sp. z o.o. <android@teleca.com>
+ * Copyright (C) 2012 Marcin Gil <marcin.gil@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,9 @@
 
 package com.teleca.jamendo.activity;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.json.JSONException;
 
 import android.app.Activity;
@@ -25,55 +28,92 @@ import android.gesture.GestureOverlayView;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.view.View;
-import android.view.View.OnClickListener;
 import android.view.Window;
+import android.widget.Adapter;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
-import android.widget.AdapterView.OnItemSelectedListener;
-import android.widget.ArrayAdapter;
-import android.widget.Button;
-import android.widget.EditText;
+import android.widget.Gallery;
 import android.widget.ListView;
-import android.widget.Spinner;
+import android.widget.SimpleAdapter;
 import android.widget.ViewFlipper;
 
 import com.teleca.jamendo.JamendoApplication;
 import com.teleca.jamendo.R;
+import com.teleca.jamendo.adapter.ArrayListAdapter;
 import com.teleca.jamendo.adapter.RadioAdapter;
-import com.teleca.jamendo.api.JamendoGet2Api;
-import com.teleca.jamendo.api.Playlist;
+import com.teleca.jamendo.adapter.RadioChannelAdapter;
 import com.teleca.jamendo.api.Radio;
 import com.teleca.jamendo.api.WSError;
 import com.teleca.jamendo.api.impl.JamendoGet2ApiImpl;
-import com.teleca.jamendo.db.DatabaseImpl;
-import com.teleca.jamendo.dialog.LoadingDialog;
+import com.teleca.jamendo.widget.FailureBar;
+import com.teleca.jamendo.widget.ProgressBar;
 
 /**
- * Radio navigation activity
+ * Radio streaming activity
  * 
- * @author Lukasz Wisniewski
+ * Unfortunately due to no support for radio channels in current API
+ * access to streaming and metadata is mostly hardcoded
+ * 
  * @author Marcin Gil
  */
 public class RadioActivity extends Activity {
-	
-	/**
-	 * statically (don't blame me) inserted recommended radios
-	 */
-	private static int[] recommended_ids = {
-		9, // rock
-		4, // dance
-		5, // hiphop
-		6, // jazz
-		7, // lounge
-		8, // pop
-		283 // metal
-	};
-	
-	/**
-	 * Recommended radios
-	 */
-	private Radio[] mRecommendedRadios;
 
+    
+    private final static String RADIO_STREAMING_URL = "http://streaming.radionomy.com/";
+    private final static String RADIO_STREAMING_META = "http://www.jamendo.com/en/radios/0/rnproxy?mount=";
+
+    /**
+     * Internal enum type to represent a radio channel.
+     * 
+     * In future this might become non-enum type that retrieves data using JamApi.
+     */
+    public static enum RadioChannel {
+        SONGWRITING("JamSongwriting", "Songwriting", R.drawable.radio_jamsongwriting),
+        POP("JamPop", "Pop", R.drawable.radio_jampop),
+        CLASSICAL("JamClassical", "Classical", R.drawable.radio_jamclassical),
+        JAZZ("JamJazz", "Jazz", R.drawable.radio_jamjazz),
+        WORLD("JamWorld", "World", R.drawable.radio_jamworld),
+        HIPHOP("JamHipHop", "Hip Hop", R.drawable.radio_jamhiphop),
+        ELECTRO("JamElectro", "Electronic", R.drawable.radio_jamelectro),
+        ROCK("JamRock", "Rock", R.drawable.radio_jamrock),
+        LOUNGE("JamLounge", "Lounge", R.drawable.radio_jamlounge),
+        BESTOF("JamBestOf", "Best of", R.drawable.radio_jambestof);
+        
+        private String name;
+        private String title;
+        private int iconId;
+        
+        RadioChannel(String name, String title, int iconId) {
+            this.name = name;
+            this.title = title;
+            this.iconId = iconId;
+        }
+        
+        public String getName() {
+            return name;
+        }
+        
+        public String getTitle() {
+            return title;
+        }
+        
+        public int getIconId() {
+            return iconId;
+        }
+        
+        public String getStreamUrl() {
+            return RADIO_STREAMING_URL + name;
+        }
+        
+        public String getMetaUrl() {
+            return RADIO_STREAMING_META + name;
+        }
+    }
+    
+    private static final int VIEWFLIPPER_PROGRESS = 0;
+    private static final int VIEWFLIPPER_GALLERY = 1;
+    private static final int VIEWFLIPPER_FAILURE = 2;
+    
 	/**
 	 * Launch this Activity from the outside
 	 *
@@ -85,126 +125,45 @@ public class RadioActivity extends Activity {
 	}
 
 	private ListView mRadioListView;
-	private RadioAdapter mRadioAdapter;
-	private Button mButton;
-	private EditText mEditText;
-	private Spinner mSpinner;
 	private ViewFlipper mViewFlipper;
 	private GestureOverlayView mGestureOverlayView;
-
-	private RadioLoadingDialog mRadioLoadingDialog;
-
+	private Gallery mGallery;
+	private ProgressBar mProgressBar;
+	private FailureBar mFailureBar;
+	private ArrayListAdapter<RadioChannel> mRadioAdapter;
+	
 	/** Called when the activity is first created. */
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		requestWindowFeature(Window.FEATURE_NO_TITLE);
-		setContentView(R.layout.search);
+		setContentView(R.layout.radio);
 
-		mRadioListView = (ListView)findViewById(R.id.SearchListView);
-		mRadioAdapter = new RadioAdapter(this);
-		mRadioListView.setAdapter(mRadioAdapter);
+		mRadioListView = (ListView)findViewById(R.id.HomeListView);
 		mRadioListView.setOnItemClickListener(mRadioListListener);
-		mButton = (Button)findViewById(R.id.SearchButton);
-		mButton.setText(R.string.radio);
-		mButton.setOnClickListener(mButtonClickListener);
-		mEditText = (EditText)findViewById(R.id.SearchEditText);
-		mViewFlipper = (ViewFlipper)findViewById(R.id.SearchViewFlipper);
 
-		mSpinner = (Spinner)findViewById(R.id.SearchSpinner);
-		ArrayAdapter adapter = ArrayAdapter.createFromResource(
-				this, R.array.radio_modes, android.R.layout.simple_spinner_item);
-		adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-		mSpinner.setAdapter(adapter);
-		mEditText.setHint(R.string.radio_hint);
-
-		mRadioLoadingDialog = new RadioLoadingDialog(this,
-				R.string.loading_recomended_radios,
-				R.string.failed_recomended_radios);
-
-		mRadioLoadingDialog.execute();
-
-		mSpinner.setOnItemSelectedListener(new OnItemSelectedListener(){
-
-			@Override
-			public void onItemSelected(AdapterView<?> arg0, View arg1,
-					int position, long arg3) {
-				switch (position) {
-				case 0:
-					// recent
-					mRadioAdapter.setList(new DatabaseImpl(RadioActivity.this).getRecentRadios(20));
-					break;
-				case 1:
-					// recommended
-					switch(mRadioLoadingDialog.getStatus()){
-						case RUNNING:
-							break;
-						case FINISHED:
-							mRadioLoadingDialog = new RadioLoadingDialog(RadioActivity.this,
-								R.string.loading_recomended_radios,
-								R.string.failed_recomended_radios);
-							mRadioLoadingDialog.execute();
-							break;
-						case PENDING:
-							mRadioLoadingDialog.execute();
-							break;
-					}
-					break;
-
-				default:
-					break;
-				}
-				
-				setupListView();
-			}
-
-			@Override
-			public void onNothingSelected(AdapterView<?> arg0) {
-			}
-			
-		});
+		mRadioAdapter = new RadioChannelAdapter(this);
+		mRadioAdapter.setList(RadioChannel.values());
 		
-		// TODO (maybe) if recent.count > 0 set to recent
-		mSpinner.setSelection(1);
+		mRadioListView.setAdapter(mRadioAdapter);
+		
+//		mGallery = (Gallery)findViewById(R.id.Gallery);
+        mProgressBar = (ProgressBar)findViewById(R.id.ProgressBar);
+        mFailureBar = (FailureBar)findViewById(R.id.FailureBar);
+        mViewFlipper = (ViewFlipper)findViewById(R.id.ViewFlipper);
 
-		mGestureOverlayView = (GestureOverlayView) findViewById(R.id.gestures);
-		mGestureOverlayView.addOnGesturePerformedListener(JamendoApplication
-				.getInstance().getPlayerGestureHandler());
+//		mGestureOverlayView = (GestureOverlayView) findViewById(R.id.gestures);
+//		mGestureOverlayView.addOnGesturePerformedListener(JamendoApplication
+//				.getInstance().getPlayerGestureHandler());
+
+        mViewFlipper.setDisplayedChild(VIEWFLIPPER_GALLERY);
 	}
 
 	@Override
 	protected void onResume() {
 		super.onResume();
-		boolean gesturesEnabled = PreferenceManager.getDefaultSharedPreferences(this).getBoolean("gestures", true);
-		mGestureOverlayView.setEnabled(gesturesEnabled);
-	}
-
-	/**
-	 * Open radio by id or idstr
-	 */
-	private OnClickListener mButtonClickListener = new OnClickListener(){
-
-		@Override
-		public void onClick(View v) {
-			
-			if(mEditText.getText().toString().length() == 0)
-				return;
-
-			new RadioSearchDialog(RadioActivity.this, R.string.searching,
-					R.string.search_fail).execute(mEditText.getText().toString());
-		}
-
-	};
-	
-	/**
-	 * Displays no result message or results on ListView
-	 */
-	private void setupListView(){
-		if(mRadioAdapter.getCount() > 0){
-			mViewFlipper.setDisplayedChild(0); // display results
-		} else {
-			mViewFlipper.setDisplayedChild(1); // display no results message
-		}
+//		boolean gesturesEnabled = PreferenceManager.getDefaultSharedPreferences(this).getBoolean("gestures", true);
+//		mGestureOverlayView.setEnabled(gesturesEnabled);
 	}
 
 	/**
@@ -215,132 +174,8 @@ public class RadioActivity extends Activity {
 		@Override
 		public void onItemClick(AdapterView<?> arg0, View arg1, int position,
 				long arg3) {
-			Radio radio = (Radio)mRadioAdapter.getItem(position);
-			new RadioPlaylistLoadingDialog(RadioActivity.this, R.string.loading_playlist,
-					R.string.loading_playlist_fail).execute(radio);
+			RadioChannel radio = (RadioChannel)mRadioAdapter.getItem(position);
+			RadioPlayerActivity.launch(RadioActivity.this, radio);
 		}
-
 	};
-	
-	private void loadRecommendedRadios() throws WSError {
-		try {
-			mRecommendedRadios = new JamendoGet2ApiImpl().getRadiosByIds(recommended_ids);
-		} catch (JSONException e) {
-			mRecommendedRadios = new Radio[0];
-			e.printStackTrace();
-		}
-	}
-
-	/**
-	 * Dialog displayed while downloading recomended radios list.
-	 */
-	private class RadioLoadingDialog extends LoadingDialog<Void, Boolean>{
-
-		public RadioLoadingDialog(Activity activity, int loadingMsg, int failMsg) {
-			super(activity, loadingMsg, failMsg);
-		}
-
-		@Override
-		public Boolean doInBackground(Void... params) {
-			try {
-				loadRecommendedRadios();
-				if (mRecommendedRadios == null || mRecommendedRadios.length == 0) {
-					return null;
-				} else {
-					return true;
-				}
-			} catch (WSError e) {
-				// connection problem or sth/ finish
-				publishProgress(e);
-				mActivity.finish();
-				return null;
-			}
-		}
-
-		@Override
-		public void doStuffWithResult(Boolean result) {
-			if(mSpinner.getSelectedItemPosition() == 1){
-				mRadioAdapter.setList(mRecommendedRadios);
-				setupListView();
-			}
-		}
-	}
-
-	/**
-	 * Dialog displayed while searching for a radio.
-	 */
-	private class RadioSearchDialog extends LoadingDialog<String, Radio[]> {
-
-		public RadioSearchDialog(Activity activity, int loadingMsg, int failMsg) {
-			super(activity, loadingMsg, failMsg);
-		}
-
-		@Override
-		public Radio[] doInBackground(String... params) {
-			String input = params[0];
-			int id = 0;
-			String idstr = null;
-			try {
-				id = Integer.parseInt(input); // search by id
-			} catch (NumberFormatException e) {
-				idstr = input; // search by name
-			}
-
-			Radio[] radio = null;
-			try {
-				JamendoGet2Api service = new JamendoGet2ApiImpl();
-				if(idstr == null && id > 0){
-					int[] ids = {id};
-					radio = service.getRadiosByIds(ids);
-				} else if (idstr != null) {
-					radio = service.getRadiosByIdstr(idstr);
-				}
-			} catch (JSONException e) {
-				e.printStackTrace();
-			} catch (WSError e) {
-				// connection problem or sth/ finish
-				publishProgress(e);
-				finish();
-			}
-			return radio;
-		}
-
-		@Override
-		public void doStuffWithResult(Radio[] radio) {
-			mRadioAdapter.setList(radio);
-			setupListView();
-		}
-	}
-
-	/**
-	 * Dialog displayed while downloading selected radio playlist.
-	 */
-	private static class RadioPlaylistLoadingDialog extends LoadingDialog<Radio, Playlist> {
-
-		public RadioPlaylistLoadingDialog(Activity activity, int loadingMsg, int failMsg) {
-			super(activity, loadingMsg, failMsg);
-		}
-
-		@Override
-		public Playlist doInBackground(Radio... params) {
-			Playlist playlist = null;
-			try {
-				Radio radio = params[0];
-				playlist = new JamendoGet2ApiImpl().getRadioPlaylist(radio, 20, JamendoApplication.getInstance().getStreamEncoding());
-				new DatabaseImpl(mActivity).addRadioToRecent(radio);
-			} catch (JSONException e) {
-				e.printStackTrace();
-			} catch (WSError e) {
-				// connection problem or sth/ finish
-				publishProgress(e);
-			}
-			return playlist;
-		}
-
-		@Override
-		public void doStuffWithResult(Playlist playlist) {
-			if (playlist != null)
-				PlayerActivity.launch(mActivity, playlist);
-		}
-	}
 }

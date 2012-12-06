@@ -154,4 +154,5 @@ limitations under the License.
     <string name="close">Close</string>
     <string name="equalizer">Equalizer</string>
     <string name="custom">Custom</string>
+    <string name="radio_channels">Radio channels</string>
 </resources>
