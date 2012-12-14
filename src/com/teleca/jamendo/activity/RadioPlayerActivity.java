@@ -101,6 +101,7 @@ public class RadioPlayerActivity extends Activity {
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		Log.i(JamendoApplication.TAG, "RadioPlayerActivity.onCreate");
+
 		requestWindowFeature(Window.FEATURE_NO_TITLE);
 		setContentView(R.layout.radio_player);
 
@@ -196,14 +197,20 @@ public class RadioPlayerActivity extends Activity {
 	@Override
     public void onResume() {
         super.onResume();
-        Log.i(JamendoApplication.TAG, "PlayerActivity.onResume");
+        
+//        JamendoApplication.getInstance().setPlayerEngineListener(mPlayerEngineListener);
+        
+        Log.i(JamendoApplication.TAG, "RadioPlayerActivity.onResume");
 
     }
 	
 	@Override
 	public void onPause() {
 		super.onPause();
-		Log.i(JamendoApplication.TAG, "PlayerActivity.onPause");
+		
+		JamendoApplication.getInstance().setPlayerEngineListener(null);
+		
+		Log.i(JamendoApplication.TAG, "RadioPlayerActivity.onPause");
 	}
 
 	/**
@@ -263,6 +270,7 @@ public class RadioPlayerActivity extends Activity {
 
 		@Override
 		public void onClick(View v) {
+		    Log.d(JamendoApplication.TAG, "RadioPlayerActivity::PlayOnClick");
 		    Intent i = new Intent(RadioPlayerActivity.this, RadioPlayerService.class);
 		    i.setAction(RadioPlayerService.ACTION_PLAY);
 		    i.putExtra(EXTRA_RADIO, mRadioChannel);
@@ -306,17 +314,7 @@ public class RadioPlayerActivity extends Activity {
 			mCurrentTimeTextView.setText(Helper.secondsToString(0));
 			mTotalTimeTextView.setText(Helper.secondsToString(playlistEntry.getTrack().getDuration()));
 			mCoverImageView.setImageUrl(playlistEntry.getAlbum().getImage().replaceAll("1.100.jpg", mBetterRes)); // Get higher resolution image 300x300
-//			mProgressBar.setProgress(0);
-//			mProgressBar.setMax(playlistEntry.getTrack().getDuration());
-			mCoverImageView.performClick();
-			
-			if(getPlayerEngine() != null){
-				if(getPlayerEngine().isPlaying()){
-					mPlayImageButton.setImageResource(R.drawable.player_pause_light);
-				} else {
-					mPlayImageButton.setImageResource(R.drawable.player_play_light);
-				}
-			}
+//			mCoverImageView.performClick();
 		}
 
 		@Override

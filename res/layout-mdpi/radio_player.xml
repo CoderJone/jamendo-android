@@ -77,23 +77,12 @@
         </RelativeLayout>
     </LinearLayout>
 
-<!--     <ProgressBar
-        android:id="@+id/ProgressBar"
-        android:layout_width="300dip"
-        android:layout_height="2dip"
-        android:layout_below="@id/TopBar"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="5dip"
-        android:indeterminateOnly="false"
-        android:progressDrawable="@+drawable/progress_dotted" />
- -->
     <com.teleca.jamendo.widget.ReflectableLayout
         android:id="@+id/ReflectableLayout"
         android:layout_width="fill_parent"
         android:layout_height="300dip"
         android:layout_below="@id/TopBar"
         android:layout_marginTop="15dp">
-<!--         android:layout_marginTop="15dip" > -->
 
         <RelativeLayout
             android:id="@+id/CoverLayout"
