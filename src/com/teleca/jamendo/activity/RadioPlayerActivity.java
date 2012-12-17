@@ -198,7 +198,8 @@ public class RadioPlayerActivity extends Activity {
     public void onResume() {
         super.onResume();
         
-//        JamendoApplication.getInstance().setPlayerEngineListener(mPlayerEngineListener);
+        JamendoApplication.getInstance().setRadioPlayerEngineListener(mPlayerEngineListener);
+        bindListener();
         
         Log.i(JamendoApplication.TAG, "RadioPlayerActivity.onResume");
 
@@ -208,7 +209,7 @@ public class RadioPlayerActivity extends Activity {
 	public void onPause() {
 		super.onPause();
 		
-		JamendoApplication.getInstance().setPlayerEngineListener(null);
+		JamendoApplication.getInstance().setRadioPlayerEngineListener(null);
 		
 		Log.i(JamendoApplication.TAG, "RadioPlayerActivity.onPause");
 	}
@@ -271,10 +272,7 @@ public class RadioPlayerActivity extends Activity {
 		@Override
 		public void onClick(View v) {
 		    Log.d(JamendoApplication.TAG, "RadioPlayerActivity::PlayOnClick");
-		    Intent i = new Intent(RadioPlayerActivity.this, RadioPlayerService.class);
-		    i.setAction(RadioPlayerService.ACTION_PLAY);
-		    i.putExtra(EXTRA_RADIO, mRadioChannel);
-		    startService(i);
+		    startPlayback();
 		    
 //			if(getPlayerEngine().isPlaying()){
 //				getPlayerEngine().pause();
@@ -292,12 +290,8 @@ public class RadioPlayerActivity extends Activity {
 
 		@Override
 		public void onClick(View v) {
-	        Intent i = new Intent(RadioPlayerActivity.this, RadioPlayerService.class);
-	        i.setAction(RadioPlayerService.ACTION_STOP);
-	        i.putExtra(EXTRA_RADIO, mRadioChannel);
-	        startService(i);
-
-//	        getPlayerEngine().stop();
+		    Log.d(JamendoApplication.TAG, "RadioPlayerActivity::StopOnClick");
+	        stopPlayback();
 		}
 
 	};
@@ -379,4 +373,31 @@ public class RadioPlayerActivity extends Activity {
 		mHandlerOfFadeOutAnimation.postDelayed(
 				mRunnableOfFadeOutAnimation, 7500);		
 	}
+
+    /**
+     * Start service for radio playback
+     */
+    private void startPlayback() {
+        Intent i = new Intent(RadioPlayerActivity.this, RadioPlayerService.class);
+        i.setAction(RadioPlayerService.ACTION_PLAY);
+        i.putExtra(EXTRA_RADIO, mRadioChannel);
+        startService(i);
+    }
+    
+    private void bindListener() {
+        Intent i = new Intent(RadioPlayerActivity.this, RadioPlayerService.class);
+        i.setAction(RadioPlayerService.ACTION_BIND);
+        i.putExtra(EXTRA_RADIO, mRadioChannel);
+        startService(i);        
+    }
+
+    /**
+     * 
+     */
+    private void stopPlayback() {
+        Intent i = new Intent(RadioPlayerActivity.this, RadioPlayerService.class);
+        i.setAction(RadioPlayerService.ACTION_STOP);
+        i.putExtra(EXTRA_RADIO, mRadioChannel);
+        startService(i);
+    }
 }

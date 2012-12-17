@@ -22,6 +22,7 @@ import java.net.MalformedURLException;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
+import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.DefaultHttpClient;
@@ -39,6 +40,7 @@ import android.media.MediaPlayer;
 import android.media.MediaPlayer.OnPreparedListener;
 import android.net.wifi.WifiManager;
 import android.net.wifi.WifiManager.WifiLock;
+import android.os.AsyncTask;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
@@ -64,7 +66,6 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
     public static final String ACTION_STOP = "stop";
     public static final String ACTION_BIND = "bind_listener";
 
-
     private static final String META_ARTIST = "artists";
     private static final String META_TRACK = "title";
     private static final String META_PING = "callmeback";
@@ -73,6 +74,7 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
     private static final String META_END = "endtime";
 
     private static final int MSG_UPDATE_META = 0x0101;
+    private static final int MSG_TRACK_CHANGE = 0x0110;
 
     private WifiManager mWifiManager;
     private WifiLock mWifiLock;
@@ -84,7 +86,7 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
     private static final int PLAYING_NOTIFY_ID = 667667;
 
     private RadioChannel mRadio;
-    private LooperThread mLooper;
+    private Handler mHandler = new PrivateHandler();
     private RadioPlayerBinder mBinder = new RadioPlayerBinder();
 
     @Override
@@ -117,9 +119,6 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
         mWifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
         mWifiLock = mWifiManager.createWifiLock(JamendoApplication.TAG);
         mWifiLock.setReferenceCounted(false);
-
-        mLooper = new LooperThread(this);
-        mLooper.start();
     }
 
     private void prepareMediaPlayer() {
@@ -131,7 +130,6 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
     public int onStartCommand(Intent intent, int flags, int startId) {
         super.onStartCommand(intent, flags, startId);
 
-        
         if (intent == null) {
             throw new IllegalArgumentException("Empty intent in RadioPlayerService");
         }
@@ -148,7 +146,7 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
         }
 
         if (action.equals(ACTION_BIND)) {
-            mRemoteEngineListener = JamendoApplication.getInstance().fetchPlayerEngineListener();
+            mRemoteEngineListener = JamendoApplication.getInstance().getRadioPlayerEngineListener();
             return START_NOT_STICKY;
         }
 
@@ -163,25 +161,67 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
         return 0;
     }
 
-    private void updateChannelMetadata() {
-        try {
-            HttpClient client = new DefaultHttpClient();  
-            HttpGet get = new HttpGet(mRadio.getMetaUrl());
+    /**
+     * Private handler implementation.
+     * 
+     * Responsible for handling radio meta update events
+     * 
+     */
+    private class PrivateHandler extends Handler {
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+            case MSG_UPDATE_META: {
+                new UpdateMetaTask().execute(mRadio);
+                break;
+            }
+            case MSG_TRACK_CHANGE: {
+                if (msg.obj != null) {
+                    PlaylistEntry entry = (PlaylistEntry) msg.obj;
+                    mLocalEngineListener.onTrackChanged(entry);
+                }
+                break;
+            }
+            }
+        }
+    };
+
+    private class UpdateMetaTask extends AsyncTask<RadioChannel, Object, Integer> {
+        @Override
+        protected void onPostExecute(Integer result) {
+            mHandler.sendEmptyMessageDelayed(MSG_UPDATE_META, result);
+            super.onPostExecute(result);
+        }
+
+        @Override
+        protected Integer doInBackground(RadioChannel... params) {
+            HttpClient client = new DefaultHttpClient();
+            HttpGet get = new HttpGet(params[0].getMetaUrl());
             get.addHeader("Accept", "application/xml");
             get.addHeader("Content-Type", "application/xml");
-            HttpResponse responsePost = client.execute(get);  
-            HttpEntity resEntity = responsePost.getEntity(); 
-            
-            Document doc = XMLUtil.stringToDocument(EntityUtils.toString(resEntity));
+            HttpResponse responsePost = null;
+            Document doc = null;
+            try {
+                responsePost = client.execute(get);
+                HttpEntity resEntity = responsePost.getEntity();
+                doc = XMLUtil.stringToDocument(EntityUtils.toString(resEntity));
+            } catch (ClientProtocolException e) {
+                e.printStackTrace();
+                // return 5s for next update
+                return 5000;
+            } catch (IOException e) {
+                e.printStackTrace();
+                // return 5s for next update
+                return 5000;
+            }
+
             doc.normalize();
 
             String artist = doc.getElementsByTagName(META_ARTIST).item(0).getTextContent();
             String track = doc.getElementsByTagName(META_TRACK).item(0).getTextContent();
             String cover = doc.getElementsByTagName(META_COVER).item(0).getTextContent();
-            
-            Integer pingTime = Integer.valueOf(doc.getElementsByTagName(META_PING).item(0).getTextContent());
 
-            mLooper.getHandler().sendEmptyMessageDelayed(MSG_UPDATE_META, pingTime);
+            Log.d(JamendoApplication.TAG, "Radio meta: " + artist + " - " + track);
+            Integer pingTime = Integer.valueOf(doc.getElementsByTagName(META_PING).item(0).getTextContent());
 
             Album a = new Album();
             a.setArtistName(artist);
@@ -189,17 +229,17 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
 
             Track t = new Track();
             t.setName(track);
-            
+
             PlaylistEntry p = new PlaylistEntry();
-            
+
             p.setAlbum(a);
             p.setTrack(t);
+
+            // send message to handler on UI thread
+            Message m = mHandler.obtainMessage(MSG_TRACK_CHANGE, p);
+            m.sendToTarget();
             
-            mLocalEngineListener.onTrackChanged(p);
-        } catch (MalformedURLException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
+            return pingTime;
         }
     }
 
@@ -284,7 +324,7 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
         }
 
         // mPlayer.start();
-        mLooper.getHandler().sendEmptyMessage(MSG_UPDATE_META);
+        mHandler.sendEmptyMessage(MSG_UPDATE_META);
     }
 
     /**
@@ -325,7 +365,7 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
         @Override
         public void onTrackStop() {
             stopPlayback();
-            
+
             if (mRemoteEngineListener != null) {
                 mRemoteEngineListener.onTrackStop();
             }
@@ -334,10 +374,12 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
         @Override
         public boolean onTrackStart() {
             startPlayback();
-            
-            if (mPlayer.isPlaying())
+
+            if (mPlayer.isPlaying()) {
+                mRemoteEngineListener.onTrackStart();
                 return true;
-            
+            }
+
             return false;
         }
 
@@ -346,7 +388,7 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
             if (mPlayer.isPlaying()) {
                 stopPlayback();
             }
-            
+
             if (mRemoteEngineListener != null) {
                 mRemoteEngineListener.onTrackPause();
             }
@@ -360,39 +402,6 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
         }
 
     };
-
-    static class LooperThread extends Thread {
-        private WeakReference<RadioPlayerService> mService;
-        private PrivateHandler mHandler;
-
-        static class PrivateHandler extends Handler {
-
-        }
-
-        public LooperThread(RadioPlayerService service) {
-            mService = new WeakReference<RadioPlayerService>(service);
-        }
-
-        public void run() {
-            Looper.prepare();
-
-            mHandler = new PrivateHandler() {
-                public void handleMessage(Message msg) {
-                    switch (msg.what) {
-                    case MSG_UPDATE_META: {
-                        mService.get().updateChannelMetadata();
-                    }
-                    }
-                }
-            };
-
-            Looper.loop();
-        }
-
-        public Handler getHandler() {
-            return mHandler;
-        }
-    }
 
     private class RadioPlayerBinder extends Binder {
         RadioPlayerService getService() {

@@ -91,7 +91,7 @@ public class JamendoApplication extends Application {
 	/**
 	 * Intent player engine
 	 */
-	private PlayerEngine mIntentPlayerEngine;
+	private PlayerEngine mPlayerEngine;
 
 	/**
 	 * Player engine listener
@@ -231,12 +231,12 @@ public class JamendoApplication extends Application {
 	 */
 	public PlayerEngine getPlayerEngineInterface() {
 		// request service bind
-		if (mIntentPlayerEngine == null) {
-			mIntentPlayerEngine = new IntentPlayerEngine();
+		if (mPlayerEngine == null) {
+			mPlayerEngine = new IntentPlayerEngine();
 		}
-		return mIntentPlayerEngine;
+		return mPlayerEngine;
 	}
-
+	
 	public GesturesHandler getPlayerGestureHandler(){
 		if(mPlayerGestureHandler == null){
 			mPlayerGestureHandler = new GesturesHandler(this, new PlayerGestureCommandRegiser(getPlayerEngineInterface()));
@@ -263,6 +263,15 @@ public class JamendoApplication extends Application {
 		return mPlayerEngineListener;
 	}
 
+	private PlayerEngineListener mRadioPlayerEngineListener;
+    public void setRadioPlayerEngineListener(PlayerEngineListener l) {
+        mRadioPlayerEngineListener = l;
+    }
+
+    public PlayerEngineListener getRadioPlayerEngineListener() {
+        return mRadioPlayerEngineListener;
+    }
+    
 	/**
 	 * Returns current playlist, used in PlayerSerive in onStart method
 	 * 
@@ -456,4 +465,5 @@ public class JamendoApplication extends Application {
 		}
 		
 	}
+
 }
