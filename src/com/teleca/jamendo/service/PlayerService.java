@@ -84,7 +84,7 @@ public class PlayerService extends Service{
 			@Override
 			public void onCallStateChanged(int state, String incomingNumber) 
 			{
-				Log.e(JamendoApplication.TAG, "onCallStateChanged");
+				Log.e(JamendoApplication.TAG, "PlayerService::onCallStateChanged");
 				if (state == TelephonyManager.CALL_STATE_IDLE)
 				{
 					// resume playback

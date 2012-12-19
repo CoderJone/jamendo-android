@@ -64,7 +64,8 @@
                 android:layout_alignParentLeft="true"
                 android:gravity="left"
                 android:text="--:--"
-                android:textColor="#fff" />
+                android:textColor="#fff"
+                android:visibility="invisible" />
 
             <TextView
                 android:id="@+id/TotalTimeTextView"

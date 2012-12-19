@@ -18,7 +18,9 @@ package com.teleca.jamendo.service;
 
 import java.io.IOException;
 import java.lang.ref.WeakReference;
-import java.net.MalformedURLException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -44,7 +46,6 @@ import android.os.AsyncTask;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
-import android.os.Looper;
 import android.os.Message;
 import android.preference.PreferenceManager;
 import android.telephony.PhoneStateListener;
@@ -66,6 +67,8 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
     public static final String ACTION_STOP = "stop";
     public static final String ACTION_BIND = "bind_listener";
 
+    public static final String EXTRA_PLAYLISTENTRY = "extra_playlistentry";
+
     private static final String META_ARTIST = "artists";
     private static final String META_TRACK = "title";
     private static final String META_PING = "callmeback";
@@ -73,6 +76,8 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
     private static final String META_START = "starttime";
     private static final String META_END = "endtime";
 
+    private static final int META_RETRY_TIME = 5000;
+    
     private static final int MSG_UPDATE_META = 0x0101;
     private static final int MSG_TRACK_CHANGE = 0x0110;
 
@@ -82,10 +87,13 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
     private PhoneStateListener mPhoneStateListener;
     private NotificationManager mNotificationManager = null;
     private MediaPlayer mPlayer = new MediaPlayer();
-
+    private boolean mPlayerPreparing = false;
+    
     private static final int PLAYING_NOTIFY_ID = 667667;
 
     private RadioChannel mRadio;
+    private PlaylistEntry mCurrentEntry = null;
+    private UpdateMetaTask mCurrentUpdateTask = null;
     private Handler mHandler = new PrivateHandler();
     private RadioPlayerBinder mBinder = new RadioPlayerBinder();
 
@@ -101,7 +109,7 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
         mPhoneStateListener = new PhoneStateListener() {
             @Override
             public void onCallStateChanged(int state, String incomingNumber) {
-                Log.e(JamendoApplication.TAG, "onCallStateChanged");
+                Log.e(JamendoApplication.TAG, "RadioPlayerService::onCallStateChanged");
                 if (state == TelephonyManager.CALL_STATE_IDLE) {
                     // resume playback
                 } else {
@@ -141,7 +149,7 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
 
         if (action.equals(ACTION_STOP)) {
             stopPlayback();
-            stopSelfResult(startId);
+            this.stopSelf();
             return START_NOT_STICKY;
         }
 
@@ -155,7 +163,7 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
                 throw new IllegalArgumentException("RadioPlayerService EXTRA_RADIO empty on ACTION_PLAY");
             }
             startPlayback();
-            return START_STICKY;
+            return START_NOT_STICKY;
         }
 
         return 0;
@@ -171,12 +179,19 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
         public void handleMessage(Message msg) {
             switch (msg.what) {
             case MSG_UPDATE_META: {
-                new UpdateMetaTask().execute(mRadio);
+                if (mCurrentUpdateTask != null) {
+                    mCurrentUpdateTask.cancel(true);
+                }
+                mCurrentUpdateTask = new UpdateMetaTask(mHandler);
+                mCurrentUpdateTask.execute(mRadio);
                 break;
             }
+            // track change because it is basically update of metadata + notification to listener
+            // it is initiated from AsyncTask but must be performed on service's thread
             case MSG_TRACK_CHANGE: {
                 if (msg.obj != null) {
                     PlaylistEntry entry = (PlaylistEntry) msg.obj;
+                    mCurrentEntry = entry;
                     mLocalEngineListener.onTrackChanged(entry);
                 }
                 break;
@@ -185,10 +200,24 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
         }
     };
 
-    private class UpdateMetaTask extends AsyncTask<RadioChannel, Object, Integer> {
+    /**
+     * Asynchronous task to update radio channel metadata from network.
+     * First started upon play then queued in handler with ping time read from XML.
+     *
+     */
+    private static class UpdateMetaTask extends AsyncTask<RadioChannel, Object, Integer> {
+        private final WeakReference<Handler> mLocalHandler;
+        
+        public UpdateMetaTask(Handler handler) {
+            mLocalHandler = new WeakReference<Handler>(handler);
+        }
+        
         @Override
         protected void onPostExecute(Integer result) {
-            mHandler.sendEmptyMessageDelayed(MSG_UPDATE_META, result);
+            if (mLocalHandler.get() != null && result != -1) {
+                mLocalHandler.get().sendEmptyMessageDelayed(MSG_UPDATE_META, result);
+            }
+
             super.onPostExecute(result);
         }
 
@@ -200,6 +229,7 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
             get.addHeader("Content-Type", "application/xml");
             HttpResponse responsePost = null;
             Document doc = null;
+            
             try {
                 responsePost = client.execute(get);
                 HttpEntity resEntity = responsePost.getEntity();
@@ -207,28 +237,46 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
             } catch (ClientProtocolException e) {
                 e.printStackTrace();
                 // return 5s for next update
-                return 5000;
+                return META_RETRY_TIME;
             } catch (IOException e) {
                 e.printStackTrace();
                 // return 5s for next update
-                return 5000;
+                return META_RETRY_TIME;
             }
 
+            if (isCancelled()) {
+                return -1;
+            }
+            
             doc.normalize();
 
             String artist = doc.getElementsByTagName(META_ARTIST).item(0).getTextContent();
             String track = doc.getElementsByTagName(META_TRACK).item(0).getTextContent();
             String cover = doc.getElementsByTagName(META_COVER).item(0).getTextContent();
+            String start = doc.getElementsByTagName(META_START).item(0).getTextContent();
+            String end = doc.getElementsByTagName(META_END).item(0).getTextContent();
 
             Log.d(JamendoApplication.TAG, "Radio meta: " + artist + " - " + track);
             Integer pingTime = Integer.valueOf(doc.getElementsByTagName(META_PING).item(0).getTextContent());
-
+            
             Album a = new Album();
             a.setArtistName(artist);
             a.setImage(cover);
-
+            
             Track t = new Track();
             t.setName(track);
+
+            try {
+                SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.sss");
+                Date startdate = df.parse(start);
+                Date enddate = df.parse(end);
+                Log.d(JamendoApplication.TAG, "startdate " + startdate);
+                Log.d(JamendoApplication.TAG, "enddate " + enddate);
+                Log.d(JamendoApplication.TAG, "diff " + (enddate.getTime() - startdate.getTime()));
+                t.setDuration((int)(enddate.getTime() - startdate.getTime()) / 1000);
+            } catch (ParseException e) {
+                e.printStackTrace();
+            }
 
             PlaylistEntry p = new PlaylistEntry();
 
@@ -236,8 +284,10 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
             p.setTrack(t);
 
             // send message to handler on UI thread
-            Message m = mHandler.obtainMessage(MSG_TRACK_CHANGE, p);
-            m.sendToTarget();
+            if (mLocalHandler.get() != null && !isCancelled()) {
+                Message m = mLocalHandler.get().obtainMessage(MSG_TRACK_CHANGE, p);
+                m.sendToTarget();
+            }
             
             return pingTime;
         }
@@ -246,11 +296,18 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
     private void stopPlayback() {
         Log.d(JamendoApplication.TAG, "RadioPlayerService::stopPlayback()");
 
-        mPlayer.stop();
+        if (mPlayer.isPlaying()) {
+            mPlayer.stop();
+        }
 
         mWifiLock.release();
 
         mNotificationManager.cancel(PLAYING_NOTIFY_ID);
+        
+        mHandler.removeMessages(MSG_UPDATE_META);
+        mHandler.removeMessages(MSG_TRACK_CHANGE);
+
+        mLocalEngineListener.onTrackStop();
     }
 
     private void startPlayback() {
@@ -274,9 +331,10 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
         }
 
         try {
-            if (mPlayer.isPlaying()) {
+            if (mPlayer.isPlaying() || mPlayerPreparing) {
                 return;
             }
+            mPlayerPreparing = true;
             mPlayer.setDataSource(mRadio.getStreamUrl());
             mPlayer.prepareAsync();
         } catch (IllegalArgumentException e) {
@@ -290,7 +348,7 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
 
     @Override
     public void onDestroy() {
-        stopPlayback();
+//        stopPlayback();
 
         mTelephonyManager.listen(mPhoneStateListener, PhoneStateListener.LISTEN_NONE);
 
@@ -308,8 +366,12 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
         Notification notification = new Notification(R.drawable.stat_notify, notificationMessage,
                 System.currentTimeMillis());
 
+        Intent i = new Intent(this, RadioPlayerActivity.class);
+        i.putExtra(EXTRA_PLAYLISTENTRY, mCurrentEntry);
+        i.putExtra(RadioPlayerActivity.EXTRA_RADIO, mRadio);
+        
         PendingIntent contentIntent = PendingIntent
-                .getActivity(this, 0, new Intent(this, RadioPlayerActivity.class), 0);
+                .getActivity(this, 0, i, 0);
 
         notification.setLatestEventInfo(this, "Jamendo Player", notificationMessage, contentIntent);
         notification.flags |= Notification.FLAG_ONGOING_EVENT;
@@ -323,7 +385,10 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
             throw new IllegalArgumentException();
         }
 
-        // mPlayer.start();
+        mPlayerPreparing = false;
+        mLocalEngineListener.onTrackStart();
+
+        mPlayer.start();
         mHandler.sendEmptyMessage(MSG_UPDATE_META);
     }
 
@@ -364,8 +429,6 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
 
         @Override
         public void onTrackStop() {
-            stopPlayback();
-
             if (mRemoteEngineListener != null) {
                 mRemoteEngineListener.onTrackStop();
             }
@@ -373,9 +436,7 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
 
         @Override
         public boolean onTrackStart() {
-            startPlayback();
-
-            if (mPlayer.isPlaying()) {
+            if (mRemoteEngineListener != null) {
                 mRemoteEngineListener.onTrackStart();
                 return true;
             }
@@ -385,10 +446,6 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
 
         @Override
         public void onTrackPause() {
-            if (mPlayer.isPlaying()) {
-                stopPlayback();
-            }
-
             if (mRemoteEngineListener != null) {
                 mRemoteEngineListener.onTrackPause();
             }

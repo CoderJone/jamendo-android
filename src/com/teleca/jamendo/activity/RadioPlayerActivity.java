@@ -17,7 +17,11 @@
 package com.teleca.jamendo.activity;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.AlertDialog.Builder;
 import android.content.Context;
+import android.content.DialogInterface;
+import android.content.DialogInterface.OnCancelListener;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
@@ -31,7 +35,6 @@ import android.view.animation.Animation;
 import android.view.animation.Animation.AnimationListener;
 import android.view.animation.AnimationUtils;
 import android.widget.ImageButton;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -63,7 +66,7 @@ public class RadioPlayerActivity extends Activity {
 	};
 
 	private RadioChannel mRadioChannel;
-	private Track mCurrentTrack;
+	private PlaylistEntry mCurrentTrack;
 	
 	// XML layout
 
@@ -90,6 +93,8 @@ public class RadioPlayerActivity extends Activity {
 	Handler mHandlerOfFadeOutAnimation; 
 	Runnable mRunnableOfFadeOutAnimation; 
 
+	private AlertDialog mLoadingDialog = null;
+	
 	public static void launch(Context c, RadioChannel channel) {
 	    Intent intent = new Intent(c, RadioPlayerActivity.class);
 	    intent.putExtra(EXTRA_RADIO, channel);
@@ -106,7 +111,7 @@ public class RadioPlayerActivity extends Activity {
 		setContentView(R.layout.radio_player);
 
 		mRadioChannel = (RadioChannel) getIntent().getSerializableExtra(EXTRA_RADIO);
-		
+
 		// XML binding
 		mBetterRes = getResources().getString(R.string.better_res);
 		
@@ -192,17 +197,25 @@ public class RadioPlayerActivity extends Activity {
 			}
 
 		});
+		
+		// if entry's not null then we're started from service and already playing
+		PlaylistEntry entry = (PlaylistEntry)getIntent().getSerializableExtra(RadioPlayerService.EXTRA_PLAYLISTENTRY);
+		if (entry != null) {
+		    setupFromEntry(entry);
+		}
 	}
 
 	@Override
     public void onResume() {
         super.onResume();
+        Log.i(JamendoApplication.TAG, "RadioPlayerActivity.onResume");
         
         JamendoApplication.getInstance().setRadioPlayerEngineListener(mPlayerEngineListener);
         bindListener();
         
-        Log.i(JamendoApplication.TAG, "RadioPlayerActivity.onResume");
-
+        if (mCurrentTrack == null) {
+            startPlayback();
+        }
     }
 	
 	@Override
@@ -303,12 +316,7 @@ public class RadioPlayerActivity extends Activity {
 
 		@Override
 		public void onTrackChanged(PlaylistEntry playlistEntry) {
-			mArtistTextView.setText(playlistEntry.getAlbum().getArtistName());
-			mSongTextView.setText(playlistEntry.getTrack().getName());
-			mCurrentTimeTextView.setText(Helper.secondsToString(0));
-			mTotalTimeTextView.setText(Helper.secondsToString(playlistEntry.getTrack().getDuration()));
-			mCoverImageView.setImageUrl(playlistEntry.getAlbum().getImage().replaceAll("1.100.jpg", mBetterRes)); // Get higher resolution image 300x300
-//			mCoverImageView.performClick();
+			setupFromEntry(playlistEntry);
 		}
 
 		@Override
@@ -330,6 +338,11 @@ public class RadioPlayerActivity extends Activity {
 
 		@Override
 		public boolean onTrackStart() {
+		    Log.d(JamendoApplication.TAG, "RadioPlayerActivity::onTrackStart()");
+		    
+		    if (mLoadingDialog != null && mLoadingDialog.isShowing()) {
+		        mLoadingDialog.dismiss();
+		    }
 			mPlayImageButton.setImageResource(R.drawable.player_pause_light);
 			return true;
 		}
@@ -375,15 +388,31 @@ public class RadioPlayerActivity extends Activity {
 	}
 
     /**
-     * Start service for radio playback
+     * Order the service to start playback
+     * Shows loading dialog which, if canceled, will also finish activity
      */
     private void startPlayback() {
         Intent i = new Intent(RadioPlayerActivity.this, RadioPlayerService.class);
         i.setAction(RadioPlayerService.ACTION_PLAY);
         i.putExtra(EXTRA_RADIO, mRadioChannel);
         startService(i);
+        
+        AlertDialog.Builder b = new Builder(this);
+        mLoadingDialog = b.setTitle("Loading channel")
+                .setMessage("Please wait while we open radio stream")
+                .setOnCancelListener(new OnCancelListener() {
+                    @Override
+                    public void onCancel(DialogInterface dialog) {
+                        stopPlayback();
+                        RadioPlayerActivity.this.finish();
+                    }
+                }).create();
+        mLoadingDialog.show();
     }
     
+    /**
+     * Order the service to bind to listener
+     */
     private void bindListener() {
         Intent i = new Intent(RadioPlayerActivity.this, RadioPlayerService.class);
         i.setAction(RadioPlayerService.ACTION_BIND);
@@ -392,12 +421,26 @@ public class RadioPlayerActivity extends Activity {
     }
 
     /**
-     * 
+     * Order the service to stop playback
      */
     private void stopPlayback() {
         Intent i = new Intent(RadioPlayerActivity.this, RadioPlayerService.class);
         i.setAction(RadioPlayerService.ACTION_STOP);
         i.putExtra(EXTRA_RADIO, mRadioChannel);
         startService(i);
+    }
+
+    /**
+     * Initialize views from playlist 
+     * @param playlistEntry
+     */
+    private void setupFromEntry(PlaylistEntry playlistEntry) {
+        mCurrentTrack = playlistEntry;
+        mArtistTextView.setText(playlistEntry.getAlbum().getArtistName());
+        mSongTextView.setText(playlistEntry.getTrack().getName());
+//		mCurrentTimeTextView.setText(Helper.secondsToString(0));
+        mTotalTimeTextView.setText(Helper.secondsToString(playlistEntry.getTrack().getDuration()));
+        mCoverImageView.setImageUrl(playlistEntry.getAlbum().getImage().replaceAll("1.100.jpg", mBetterRes)); // Get higher resolution image 300x300
+		mCoverImageView.performClick();
     }
 }
