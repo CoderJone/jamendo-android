@@ -211,7 +211,6 @@ public class RadioPlayerActivity extends Activity {
         Log.i(JamendoApplication.TAG, "RadioPlayerActivity.onResume");
         
         JamendoApplication.getInstance().setRadioPlayerEngineListener(mPlayerEngineListener);
-        bindListener();
         
         if (mCurrentTrack == null) {
             startPlayback();
@@ -223,6 +222,7 @@ public class RadioPlayerActivity extends Activity {
 		super.onPause();
 		
 		JamendoApplication.getInstance().setRadioPlayerEngineListener(null);
+		bindListener();
 		
 		Log.i(JamendoApplication.TAG, "RadioPlayerActivity.onPause");
 	}
@@ -396,6 +396,8 @@ public class RadioPlayerActivity extends Activity {
         i.setAction(RadioPlayerService.ACTION_PLAY);
         i.putExtra(EXTRA_RADIO, mRadioChannel);
         startService(i);
+        
+        bindListener();
         
         AlertDialog.Builder b = new Builder(this);
         mLoadingDialog = b.setTitle("Loading channel")

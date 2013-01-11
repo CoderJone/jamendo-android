@@ -63,6 +63,8 @@ import com.teleca.jamendo.api.util.XMLUtil;
 import com.teleca.jamendo.media.PlayerEngineListener;
 
 public class RadioPlayerService extends Service implements OnPreparedListener {
+    private static final String TAG = "Jamendo RadioPlayerService";
+    
     public static final String ACTION_PLAY = "play";
     public static final String ACTION_STOP = "stop";
     public static final String ACTION_BIND = "bind_listener";
@@ -143,7 +145,6 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
         }
 
         String action = intent.getAction();
-        mRadio = (RadioChannel) intent.getSerializableExtra(RadioPlayerActivity.EXTRA_RADIO);
 
         Log.i(JamendoApplication.TAG, "Radio Player Service onStart - " + action);
 
@@ -154,6 +155,7 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
         }
 
         if (action.equals(ACTION_BIND)) {
+            Log.d(TAG, "onStartCommand::bind listener");
             mRemoteEngineListener = JamendoApplication.getInstance().getRadioPlayerEngineListener();
             return START_NOT_STICKY;
         }
@@ -162,7 +164,7 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
             if (!intent.hasExtra(RadioPlayerActivity.EXTRA_RADIO)) {
                 throw new IllegalArgumentException("RadioPlayerService EXTRA_RADIO empty on ACTION_PLAY");
             }
-            startPlayback();
+            startPlayback((RadioChannel) intent.getSerializableExtra(RadioPlayerActivity.EXTRA_RADIO));
             return START_NOT_STICKY;
         }
 
@@ -298,6 +300,7 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
 
         if (mPlayer.isPlaying()) {
             mPlayer.stop();
+            mPlayer.release();
         }
 
         mWifiLock.release();
@@ -310,7 +313,7 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
         mLocalEngineListener.onTrackStop();
     }
 
-    private void startPlayback() {
+    private void startPlayback(RadioChannel radio) {
         Log.d(JamendoApplication.TAG, "RadioPlayerService::startPlayback()");
 
         mWifiLock.acquire();
@@ -332,11 +335,23 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
 
         try {
             if (mPlayer.isPlaying() || mPlayerPreparing) {
-                return;
+                if (mRadio.getStreamUrl() == radio.getStreamUrl()) {
+                    return;
+                }
+                mPlayer.stop();
+                mPlayer.release();
+                mPlayer = new MediaPlayer();
+                prepareMediaPlayer();
             }
+            Log.d(TAG, "startPlayback(): before setDataSource/prepareAsync()");
+            
+            mRadio = radio;
+            
             mPlayerPreparing = true;
             mPlayer.setDataSource(mRadio.getStreamUrl());
             mPlayer.prepareAsync();
+            
+            Log.d(TAG, "startPlayback(): after prepareAsync");
         } catch (IllegalArgumentException e) {
             e.printStackTrace();
         } catch (IllegalStateException e) {
@@ -381,6 +396,8 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
 
     @Override
     public void onPrepared(MediaPlayer mp) {
+        Log.d(TAG, "onPrepared() begin");
+        
         if (mp != mPlayer) {
             throw new IllegalArgumentException();
         }
@@ -388,8 +405,10 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
         mPlayerPreparing = false;
         mLocalEngineListener.onTrackStart();
 
+        Log.d(TAG, "onPrepared() before mPlayer.start");
         mPlayer.start();
         mHandler.sendEmptyMessage(MSG_UPDATE_META);
+        Log.d(TAG, "onPrepared() end");
     }
 
     /**
@@ -436,11 +455,14 @@ public class RadioPlayerService extends Service implements OnPreparedListener {
 
         @Override
         public boolean onTrackStart() {
+            Log.d(TAG, "LocalEngineListener::onTrackStart begin");
             if (mRemoteEngineListener != null) {
+                Log.d(TAG, "LocalEngineListener::onTrackStart call remote listener");
                 mRemoteEngineListener.onTrackStart();
                 return true;
             }
 
+            Log.e(TAG, "LocalEngineListener::onTrackStart no remote listener");
             return false;
         }
 
