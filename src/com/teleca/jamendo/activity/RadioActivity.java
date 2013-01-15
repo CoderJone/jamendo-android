@@ -42,7 +42,10 @@ import com.teleca.jamendo.R;
 import com.teleca.jamendo.adapter.ArrayListAdapter;
 import com.teleca.jamendo.adapter.RadioAdapter;
 import com.teleca.jamendo.adapter.RadioChannelAdapter;
+import com.teleca.jamendo.api.Album;
+import com.teleca.jamendo.api.PlaylistEntry;
 import com.teleca.jamendo.api.Radio;
+import com.teleca.jamendo.api.Track;
 import com.teleca.jamendo.api.WSError;
 import com.teleca.jamendo.api.impl.JamendoGet2ApiImpl;
 import com.teleca.jamendo.widget.FailureBar;
@@ -107,6 +110,29 @@ public class RadioActivity extends Activity {
         
         public String getMetaUrl() {
             return RADIO_STREAMING_META + name;
+        }
+        
+        public PlaylistEntry asPlaylistEntry() {
+            PlaylistEntry entry = new PlaylistEntry();
+            
+            Album a = new Album();
+            a.setImage(Integer.toString(iconId));
+            a.setName(title);
+            
+            entry.setAlbum(a);
+            
+            Track t = new Track();
+            t.setName(name);
+            t.setStream(getStreamUrl());
+            t.setUrl(getMetaUrl());
+
+            entry.setTrack(t);
+            
+            return entry;
+        }
+        
+        public static RadioChannel fromPlaylistEntry(PlaylistEntry entry) {
+            return RadioChannel.valueOf(entry.getTrack().getName());
         }
     }
     
