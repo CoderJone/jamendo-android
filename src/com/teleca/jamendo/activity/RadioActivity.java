@@ -43,6 +43,7 @@ import com.teleca.jamendo.adapter.ArrayListAdapter;
 import com.teleca.jamendo.adapter.RadioAdapter;
 import com.teleca.jamendo.adapter.RadioChannelAdapter;
 import com.teleca.jamendo.api.Album;
+import com.teleca.jamendo.api.Playlist;
 import com.teleca.jamendo.api.PlaylistEntry;
 import com.teleca.jamendo.api.Radio;
 import com.teleca.jamendo.api.Track;
@@ -132,7 +133,12 @@ public class RadioActivity extends Activity {
         }
         
         public static RadioChannel fromPlaylistEntry(PlaylistEntry entry) {
-            return RadioChannel.valueOf(entry.getTrack().getName());
+            for (RadioChannel ch: RadioChannel.values()) {
+                if (ch.getName().equalsIgnoreCase(entry.getTrack().getName())) {
+                    return ch;
+                }
+            }
+            throw new IllegalArgumentException("No constant with name " + entry.getTrack().getName() + " found");
         }
     }
     

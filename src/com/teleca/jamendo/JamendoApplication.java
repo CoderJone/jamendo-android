@@ -263,15 +263,6 @@ public class JamendoApplication extends Application {
 		return mPlayerEngineListener;
 	}
 
-	private PlayerEngineListener mRadioPlayerEngineListener;
-    public void setRadioPlayerEngineListener(PlayerEngineListener l) {
-        mRadioPlayerEngineListener = l;
-    }
-
-    public PlayerEngineListener getRadioPlayerEngineListener() {
-        return mRadioPlayerEngineListener;
-    }
-    
 	/**
 	 * Returns current playlist, used in PlayerSerive in onStart method
 	 * 

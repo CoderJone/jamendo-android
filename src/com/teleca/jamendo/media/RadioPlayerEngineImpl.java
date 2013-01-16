@@ -20,6 +20,7 @@ import org.w3c.dom.Document;
 
 import android.media.AudioManager;
 import android.media.MediaPlayer;
+import android.media.MediaPlayer.OnBufferingUpdateListener;
 import android.media.MediaPlayer.OnPreparedListener;
 import android.os.AsyncTask;
 import android.os.Handler;
@@ -39,7 +40,7 @@ import com.teleca.jamendo.api.util.XMLUtil;
  * @author Marcin Gil <marcin.gil@gmail.com>
  * 
  */
-public class RadioPlayerEngineImpl implements PlayerEngine, OnPreparedListener {
+public class RadioPlayerEngineImpl implements PlayerEngine {
     private final static String TAG = "Jamendo RadioPlayerEngineImpl";
 
     private static final String META_ARTIST = "artists";
@@ -102,23 +103,13 @@ public class RadioPlayerEngineImpl implements PlayerEngine, OnPreparedListener {
                 mHandler.removeMessages(MSG_UPDATE_META);
                 mHandler.removeMessages(MSG_TRACK_CHANGE);
 
-                mPlayer = new MediaPlayer();
-
-                mPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-                mPlayer.setOnPreparedListener(this);
+                mPlayer = build();
+                JamendoApplication.getInstance().setMyCurrentMedia(mPlayer);
+                
+                return;
             }
-            Log.d(TAG, "startPlayback(): before setDataSource/prepareAsync()");
 
-            mPlayerPreparing = true;
-            mPlayerNewRadio = false;
-            mPlayer.setDataSource(mRadio.getStreamUrl());
-            mPlayer.prepareAsync();
-
-            mHandler.sendEmptyMessage(MSG_UPDATE_META);
-
-            Log.d(TAG, "startPlayback(): after prepareAsync");
-
-            JamendoApplication.getInstance().setMyCurrentMedia(mPlayer);
+            mPlayer.start();
         } catch (IllegalArgumentException e) {
             e.printStackTrace();
         } catch (IllegalStateException e) {
@@ -218,24 +209,47 @@ public class RadioPlayerEngineImpl implements PlayerEngine, OnPreparedListener {
         // no action on radio stream
     }
 
-    @Override
-    public void onPrepared(MediaPlayer player) {
-        if (player != mPlayer) {
-            throw new IllegalArgumentException();
-        }
+    private MediaPlayer build() throws IllegalArgumentException, IllegalStateException, IOException {
+        final MediaPlayer player = new MediaPlayer();
 
-        mPlayerPreparing = false;
-        if (mPlayerPlayAfterPrepare == false) {
-            return;
-        }
+        player.setAudioStreamType(AudioManager.STREAM_MUSIC);
 
-        mPlayerEngineListener.onTrackStart();
+        player.setOnPreparedListener(new OnPreparedListener(){
 
-        Log.d(TAG, "onPrepared() before mPlayer.start");
-        mPlayer.start();
-        Log.d(TAG, "onPrepared() end");
+            @Override
+            public void onPrepared(MediaPlayer mp) {
+                mPlayerPreparing = false;
+                if (mPlayerPlayAfterPrepare == false) {
+                    return;
+                }
+
+                mPlayerEngineListener.onTrackStart();
+                
+                play();
+            }
+        });
+        
+        player.setOnBufferingUpdateListener(new OnBufferingUpdateListener(){
+
+            @Override
+            public void onBufferingUpdate(MediaPlayer mp, int percent) {
+                if(mPlayerEngineListener != null){
+                    mPlayerEngineListener.onTrackBuffering(percent);
+                }
+            }
+            
+        });
+        
+        mPlayerPreparing = true;
+        mPlayerNewRadio = false;
+        mPlayer.setDataSource(mRadio.getStreamUrl());
+        mPlayer.prepareAsync();
+        
+        mHandler.sendEmptyMessage(MSG_UPDATE_META);
+        
+        return player;
     }
-
+    
     /**
      * Private handler implementation.
      * 

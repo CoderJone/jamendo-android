@@ -53,355 +53,345 @@ import com.teleca.jamendo.widget.ReflectiveSurface;
 import com.teleca.jamendo.widget.RemoteImageView;
 
 /**
- * Play Jamendo's icecast streams. Simpler than normal player as there are no playlists,
- * no skip/next/prev functionality
- *   
+ * Play Jamendo's icecast streams. Simpler than normal player as there are no playlists, no skip/next/prev functionality
+ * 
  * @author Marcin Gil
  */
 public class RadioPlayerActivity extends Activity {
     public static String EXTRA_RADIO = "RadioChannelExtra";
-    
-	private PlayerEngine getPlayerEngine(){
-		return JamendoApplication.getInstance().getPlayerEngineInterface();
-	};
 
-	private RadioChannel mRadioChannel;
-	private PlaylistEntry mCurrentTrack;
-	
-	// XML layout
+    private PlayerEngine getPlayerEngine() {
+        return JamendoApplication.getInstance().getPlayerEngineInterface();
+    };
 
-	private TextView mArtistTextView;
-	private TextView mSongTextView;
-	private TextView mCurrentTimeTextView;
-	private TextView mTotalTimeTextView;
-//	private ProgressBar mProgressBar;
+    private RadioChannel mRadioChannel;
+    private PlaylistEntry mCurrentTrack;
 
-	private ImageButton mPlayImageButton;
-	private ImageButton mStopImageButton;
+    // XML layout
 
-	private RemoteImageView mCoverImageView;
+    private TextView mArtistTextView;
+    private TextView mSongTextView;
+    private TextView mCurrentTimeTextView;
+    private TextView mTotalTimeTextView;
+    // private ProgressBar mProgressBar;
 
-	private Animation mFadeInAnimation;
-	private Animation mFadeOutAnimation;
-	
-	private ReflectableLayout mReflectableLayout;
-	private ReflectiveSurface mReflectiveSurface;
-	
-	private String mBetterRes;	
+    private ImageButton mPlayImageButton;
+    private ImageButton mStopImageButton;
 
-	SeekToMode seekToMode;
-	Handler mHandlerOfFadeOutAnimation; 
-	Runnable mRunnableOfFadeOutAnimation; 
+    private RemoteImageView mCoverImageView;
 
-	private AlertDialog mLoadingDialog = null;
-	
-	public static void launch(Context c, RadioChannel channel) {
-	    Intent intent = new Intent(c, RadioPlayerActivity.class);
-	    intent.putExtra(EXTRA_RADIO, channel);
-	    c.startActivity(intent);
-	}
+    private Animation mFadeInAnimation;
+    private Animation mFadeOutAnimation;
 
-	/** Called when the activity is first created. */
-	@Override
-	public void onCreate(Bundle savedInstanceState) {
-		super.onCreate(savedInstanceState);
-		Log.i(JamendoApplication.TAG, "RadioPlayerActivity.onCreate");
+    private ReflectableLayout mReflectableLayout;
+    private ReflectiveSurface mReflectiveSurface;
 
-		requestWindowFeature(Window.FEATURE_NO_TITLE);
-		setContentView(R.layout.radio_player);
+    private String mBetterRes;
 
-		mRadioChannel = (RadioChannel) getIntent().getSerializableExtra(EXTRA_RADIO);
+    SeekToMode seekToMode;
+    Handler mHandlerOfFadeOutAnimation;
+    Runnable mRunnableOfFadeOutAnimation;
 
-		// XML binding
-		mBetterRes = getResources().getString(R.string.better_res);
-		
-		mArtistTextView = (TextView)findViewById(R.id.ArtistTextView);
-		mSongTextView = (TextView)findViewById(R.id.SongTextView);
-		//AutoScrolling of long song titles
-		mSongTextView.setEllipsize(TruncateAt.MARQUEE);
-		mSongTextView.setHorizontallyScrolling(true);
-		mSongTextView.setSelected(true);
-		
-		mCurrentTimeTextView = (TextView)findViewById(R.id.CurrentTimeTextView);
-		mTotalTimeTextView = (TextView)findViewById(R.id.TotalTimeTextView);
+    private AlertDialog mLoadingDialog = null;
 
-		mCoverImageView = (RemoteImageView)findViewById(R.id.CoverImageView);
-		mCoverImageView.setOnClickListener(mCoverOnClickListener);
-		mCoverImageView.setDefaultImage(R.drawable.no_cd_300);
+    public static void launch(Context c, RadioChannel channel) {
+        Intent intent = new Intent(c, RadioPlayerActivity.class);
+        intent.putExtra(EXTRA_RADIO, channel);
+        c.startActivity(intent);
+    }
 
-//		mProgressBar = (ProgressBar)findViewById(R.id.ProgressBar);
-		
-		mReflectableLayout = (ReflectableLayout)findViewById(R.id.ReflectableLayout);
-		mReflectiveSurface = (ReflectiveSurface)findViewById(R.id.ReflectiveSurface);
-		
-		if(mReflectableLayout != null && mReflectiveSurface != null){
-			mReflectableLayout.setReflectiveSurface(mReflectiveSurface);
-			mReflectiveSurface.setReflectableLayout(mReflectableLayout);
-		}
+    /** Called when the activity is first created. */
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        Log.i(JamendoApplication.TAG, "RadioPlayerActivity.onCreate");
 
-		//used for Fade Out Animation handle control
-		mHandlerOfFadeOutAnimation = new Handler(); 
-		mRunnableOfFadeOutAnimation =new Runnable(){
-			public void run() {				
-				if ( mFadeInAnimation.hasEnded() )
-					mPlayImageButton.startAnimation(mFadeOutAnimation);
-			}
-			
-		}; 
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        setContentView(R.layout.radio_player);
 
-		mPlayImageButton = (ImageButton)findViewById(R.id.PlayImageButton);
-		mPlayImageButton.setOnClickListener(mPlayOnClickListener);
+        mRadioChannel = (RadioChannel) getIntent().getSerializableExtra(EXTRA_RADIO);
 
-		mStopImageButton = (ImageButton)findViewById(R.id.StopImageButton);
-		mStopImageButton.setOnClickListener(mStopOnClickListener);
+        // XML binding
+        mBetterRes = getResources().getString(R.string.better_res);
 
-		mFadeInAnimation = AnimationUtils.loadAnimation(this, R.anim.fade_in);
-		mFadeInAnimation.setAnimationListener(new AnimationListener(){
+        mArtistTextView = (TextView) findViewById(R.id.ArtistTextView);
+        mSongTextView = (TextView) findViewById(R.id.SongTextView);
+        // AutoScrolling of long song titles
+        mSongTextView.setEllipsize(TruncateAt.MARQUEE);
+        mSongTextView.setHorizontallyScrolling(true);
+        mSongTextView.setSelected(true);
 
-			@Override
-			public void onAnimationEnd(Animation animation) {
-				mHandlerOfFadeOutAnimation
-						.removeCallbacks(mRunnableOfFadeOutAnimation);
-				mHandlerOfFadeOutAnimation.postDelayed(
-						mRunnableOfFadeOutAnimation, 7500);
-			}
+        mCurrentTimeTextView = (TextView) findViewById(R.id.CurrentTimeTextView);
+        mTotalTimeTextView = (TextView) findViewById(R.id.TotalTimeTextView);
 
-			@Override
-			public void onAnimationRepeat(Animation animation) {
-				// nothing here
-			}
+        mCoverImageView = (RemoteImageView) findViewById(R.id.CoverImageView);
+        mCoverImageView.setOnClickListener(mCoverOnClickListener);
+        mCoverImageView.setDefaultImage(R.drawable.no_cd_300);
 
-			@Override
-			public void onAnimationStart(Animation animation) {
-				setMediaVisible();
-			}
+        // mProgressBar = (ProgressBar)findViewById(R.id.ProgressBar);
 
-		});
+        mReflectableLayout = (ReflectableLayout) findViewById(R.id.ReflectableLayout);
+        mReflectiveSurface = (ReflectiveSurface) findViewById(R.id.ReflectiveSurface);
 
-		mFadeOutAnimation = AnimationUtils.loadAnimation(this, R.anim.fade_out);
-		mFadeOutAnimation.setAnimationListener(new AnimationListener(){
+        if (mReflectableLayout != null && mReflectiveSurface != null) {
+            mReflectableLayout.setReflectiveSurface(mReflectiveSurface);
+            mReflectiveSurface.setReflectableLayout(mReflectableLayout);
+        }
 
-			@Override
-			public void onAnimationEnd(Animation animation) {
-				setMediaGone();
-			}
+        // used for Fade Out Animation handle control
+        mHandlerOfFadeOutAnimation = new Handler();
+        mRunnableOfFadeOutAnimation = new Runnable() {
+            public void run() {
+                if (mFadeInAnimation.hasEnded())
+                    mPlayImageButton.startAnimation(mFadeOutAnimation);
+            }
 
-			@Override
-			public void onAnimationRepeat(Animation animation) {
-				// nothing here
-			}
+        };
 
-			@Override
-			public void onAnimationStart(Animation animation) {
-				setFadeOutAnimation();
-			}
+        mPlayImageButton = (ImageButton) findViewById(R.id.PlayImageButton);
+        mPlayImageButton.setOnClickListener(mPlayOnClickListener);
 
-		});
-		
-		// if entry's not null then we're started from service and already playing
-		PlaylistEntry entry = (PlaylistEntry)getIntent().getSerializableExtra(RadioPlayerService.EXTRA_PLAYLISTENTRY);
-		if (entry != null) {
-		    setupFromEntry(entry);
-		}
-	}
+        mStopImageButton = (ImageButton) findViewById(R.id.StopImageButton);
+        mStopImageButton.setOnClickListener(mStopOnClickListener);
 
-	@Override
+        mFadeInAnimation = AnimationUtils.loadAnimation(this, R.anim.fade_in);
+        mFadeInAnimation.setAnimationListener(new AnimationListener() {
+
+            @Override
+            public void onAnimationEnd(Animation animation) {
+                mHandlerOfFadeOutAnimation.removeCallbacks(mRunnableOfFadeOutAnimation);
+                mHandlerOfFadeOutAnimation.postDelayed(mRunnableOfFadeOutAnimation, 7500);
+            }
+
+            @Override
+            public void onAnimationRepeat(Animation animation) {
+                // nothing here
+            }
+
+            @Override
+            public void onAnimationStart(Animation animation) {
+                setMediaVisible();
+            }
+
+        });
+
+        mFadeOutAnimation = AnimationUtils.loadAnimation(this, R.anim.fade_out);
+        mFadeOutAnimation.setAnimationListener(new AnimationListener() {
+
+            @Override
+            public void onAnimationEnd(Animation animation) {
+                setMediaGone();
+            }
+
+            @Override
+            public void onAnimationRepeat(Animation animation) {
+                // nothing here
+            }
+
+            @Override
+            public void onAnimationStart(Animation animation) {
+                setFadeOutAnimation();
+            }
+
+        });
+
+        // if entry's not null then we're started from service and already playing
+        PlaylistEntry entry = (PlaylistEntry) getIntent().getSerializableExtra(RadioPlayerService.EXTRA_PLAYLISTENTRY);
+        if (entry != null) {
+            setupFromEntry(entry);
+        }
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
         Log.i(JamendoApplication.TAG, "RadioPlayerActivity.onResume");
-        
-        JamendoApplication.getInstance().setRadioPlayerEngineListener(mPlayerEngineListener);
-        
+
+        JamendoApplication.getInstance().setPlayerEngineListener(mPlayerEngineListener);
+
         if (mCurrentTrack == null) {
             startPlayback();
         }
     }
-	
-	@Override
-	public void onPause() {
-		super.onPause();
-		
-		JamendoApplication.getInstance().setRadioPlayerEngineListener(null);
-		bindListener();
-		
-		Log.i(JamendoApplication.TAG, "RadioPlayerActivity.onPause");
-	}
 
-	/**
-	 * Makes 4-way media visible
-	 */
-	private void setMediaVisible(){
-		mPlayImageButton.setVisibility(View.VISIBLE);
-		mStopImageButton.setVisibility(View.VISIBLE);
-	}
+    @Override
+    public void onPause() {
+        super.onPause();
 
-	/**
-	 * Makes 4-way media gone
-	 */
-	private void setMediaGone(){
-		mPlayImageButton.setVisibility(View.GONE);
-		mStopImageButton.setVisibility(View.GONE);
-	}
+        JamendoApplication.getInstance().setPlayerEngineListener(null);
+        bindListener();
 
-	/**
-	 * Sets fade out animation to 4-way media
-	 */
-	private void setFadeOutAnimation(){
-		mPlayImageButton.setAnimation(mFadeOutAnimation);
-		mStopImageButton.setAnimation(mFadeOutAnimation);
-	}
-
-	/**
-	 * Sets fade out animation to 4-way media
-	 */
-	private void setFadeInAnimation(){
-		mPlayImageButton.setAnimation(mFadeInAnimation);
-		mStopImageButton.setAnimation(mFadeInAnimation);
-	}
-
-	/**
-	 * Launches fade in/out sequence
-	 */
-	private OnClickListener mCoverOnClickListener = new OnClickListener(){
-
-		@Override
-		public void onClick(View v) {
-
-			if(mPlayImageButton.getVisibility() == View.GONE)
-			{
-				setMediaVisible();
-				setFadeInAnimation();
-				mPlayImageButton.startAnimation(mFadeInAnimation);
-			}
-		}
-
-	};
-
-	/**
-	 * on click play/pause and open playlist if necessary
-	 */
-	private OnClickListener mPlayOnClickListener = new OnClickListener(){
-
-		@Override
-		public void onClick(View v) {
-		    Log.d(JamendoApplication.TAG, "RadioPlayerActivity::PlayOnClick");
-		    startPlayback();
-		    
-//			if(getPlayerEngine().isPlaying()){
-//				getPlayerEngine().pause();
-//			} else {
-//				getPlayerEngine().play();
-//			}
-		}
-
-	};
-
-	/**
-	 * stop button action
-	 */
-	private OnClickListener mStopOnClickListener = new OnClickListener(){
-
-		@Override
-		public void onClick(View v) {
-		    Log.d(JamendoApplication.TAG, "RadioPlayerActivity::StopOnClick");
-	        stopPlayback();
-		}
-
-	};
-	
-	/**
-	 * PlayerEngineListener implementation, manipulates UI
-	 */
-	private PlayerEngineListener mPlayerEngineListener = new PlayerEngineListener(){
-
-		@Override
-		public void onTrackChanged(PlaylistEntry playlistEntry) {
-			setupFromEntry(playlistEntry);
-		}
-
-		@Override
-		public void onTrackProgress(int seconds) {
-			mCurrentTimeTextView.setText(Helper.secondsToString(seconds));
-//			mProgressBar.setProgress(seconds);
-		}
-
-		@Override
-		public void onTrackBuffering(int percent) {
-//			int secondaryProgress = (int) (((float)percent/100)*mProgressBar.getMax());
-//			mProgressBar.setSecondaryProgress(secondaryProgress);
-		}
-
-		@Override
-		public void onTrackStop() {
-			mPlayImageButton.setImageResource(R.drawable.player_play_light);
-		}
-
-		@Override
-		public boolean onTrackStart() {
-		    Log.d(JamendoApplication.TAG, "RadioPlayerActivity::onTrackStart()");
-		    
-		    if (mLoadingDialog != null && mLoadingDialog.isShowing()) {
-		        mLoadingDialog.dismiss();
-		    }
-			mPlayImageButton.setImageResource(R.drawable.player_pause_light);
-			return true;
-		}
-
-		@Override
-		public void onTrackPause() {
-			mPlayImageButton.setImageResource(R.drawable.player_play_light);
-		}
-
-		@Override
-		public void onTrackStreamError() {
-			Toast.makeText(RadioPlayerActivity.this, R.string.stream_error, Toast.LENGTH_LONG).show();
-		}
-
-	};
-
-	@Override
-	public boolean onKeyDown(int keyCode, KeyEvent event) {
-		if(keyCode == KeyEvent.KEYCODE_MENU){
-			return true;
-		}
-		return super.onKeyDown(keyCode, event);
-	}
-	
-	public void albumClickHandler(View target) {
-		AlbumActivity.launch(this, getPlayerEngine().getPlaylist().getSelectedTrack().getAlbum());
+        Log.i(JamendoApplication.TAG, "RadioPlayerActivity.onPause");
     }
-
-	public void artistClickHandler(View target) {
-		ArtistActivity.launch(this, getPlayerEngine().getPlaylist().getSelectedTrack().getAlbum().getArtistName());
-    }
-	
-	public void onStartSeekToProcess(){		
-		mHandlerOfFadeOutAnimation
-				.removeCallbacks(mRunnableOfFadeOutAnimation);
-	}
-	
-	public void onFinishSeekToProcess(){		
-		mHandlerOfFadeOutAnimation
-				.removeCallbacks(mRunnableOfFadeOutAnimation);
-		mHandlerOfFadeOutAnimation.postDelayed(
-				mRunnableOfFadeOutAnimation, 7500);		
-	}
 
     /**
-     * Order the service to start playback
-     * Shows loading dialog which, if canceled, will also finish activity
+     * Makes 4-way media visible
+     */
+    private void setMediaVisible() {
+        mPlayImageButton.setVisibility(View.VISIBLE);
+        mStopImageButton.setVisibility(View.VISIBLE);
+    }
+
+    /**
+     * Makes 4-way media gone
+     */
+    private void setMediaGone() {
+        mPlayImageButton.setVisibility(View.GONE);
+        mStopImageButton.setVisibility(View.GONE);
+    }
+
+    /**
+     * Sets fade out animation to 4-way media
+     */
+    private void setFadeOutAnimation() {
+        mPlayImageButton.setAnimation(mFadeOutAnimation);
+        mStopImageButton.setAnimation(mFadeOutAnimation);
+    }
+
+    /**
+     * Sets fade out animation to 4-way media
+     */
+    private void setFadeInAnimation() {
+        mPlayImageButton.setAnimation(mFadeInAnimation);
+        mStopImageButton.setAnimation(mFadeInAnimation);
+    }
+
+    /**
+     * Launches fade in/out sequence
+     */
+    private OnClickListener mCoverOnClickListener = new OnClickListener() {
+
+        @Override
+        public void onClick(View v) {
+
+            if (mPlayImageButton.getVisibility() == View.GONE) {
+                setMediaVisible();
+                setFadeInAnimation();
+                mPlayImageButton.startAnimation(mFadeInAnimation);
+            }
+        }
+
+    };
+
+    /**
+     * on click play/pause and open playlist if necessary
+     */
+    private OnClickListener mPlayOnClickListener = new OnClickListener() {
+
+        @Override
+        public void onClick(View v) {
+            Log.d(JamendoApplication.TAG, "RadioPlayerActivity::PlayOnClick");
+
+            if (getPlayerEngine().isPlaying()) {
+                getPlayerEngine().pause();
+            } else {
+                getPlayerEngine().play();
+            }
+        }
+
+    };
+
+    /**
+     * stop button action
+     */
+    private OnClickListener mStopOnClickListener = new OnClickListener() {
+
+        @Override
+        public void onClick(View v) {
+            Log.d(JamendoApplication.TAG, "RadioPlayerActivity::StopOnClick");
+            stopPlayback();
+        }
+
+    };
+
+    /**
+     * PlayerEngineListener implementation, manipulates UI
+     */
+    private PlayerEngineListener mPlayerEngineListener = new PlayerEngineListener() {
+
+        @Override
+        public void onTrackChanged(PlaylistEntry playlistEntry) {
+            setupFromEntry(playlistEntry);
+        }
+
+        @Override
+        public void onTrackProgress(int seconds) {
+            mCurrentTimeTextView.setText(Helper.secondsToString(seconds));
+            // mProgressBar.setProgress(seconds);
+        }
+
+        @Override
+        public void onTrackBuffering(int percent) {
+            // int secondaryProgress = (int) (((float)percent/100)*mProgressBar.getMax());
+            // mProgressBar.setSecondaryProgress(secondaryProgress);
+        }
+
+        @Override
+        public void onTrackStop() {
+            mPlayImageButton.setImageResource(R.drawable.player_play_light);
+        }
+
+        @Override
+        public boolean onTrackStart() {
+            Log.d(JamendoApplication.TAG, "RadioPlayerActivity::onTrackStart()");
+
+            if (mLoadingDialog != null && mLoadingDialog.isShowing()) {
+                mLoadingDialog.dismiss();
+            }
+            mPlayImageButton.setImageResource(R.drawable.player_pause_light);
+            return true;
+        }
+
+        @Override
+        public void onTrackPause() {
+            mPlayImageButton.setImageResource(R.drawable.player_play_light);
+        }
+
+        @Override
+        public void onTrackStreamError() {
+            Toast.makeText(RadioPlayerActivity.this, R.string.stream_error, Toast.LENGTH_LONG).show();
+        }
+
+    };
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_MENU) {
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
+    public void albumClickHandler(View target) {
+        AlbumActivity.launch(this, getPlayerEngine().getPlaylist().getSelectedTrack().getAlbum());
+    }
+
+    public void artistClickHandler(View target) {
+        ArtistActivity.launch(this, getPlayerEngine().getPlaylist().getSelectedTrack().getAlbum().getArtistName());
+    }
+
+    public void onStartSeekToProcess() {
+        mHandlerOfFadeOutAnimation.removeCallbacks(mRunnableOfFadeOutAnimation);
+    }
+
+    public void onFinishSeekToProcess() {
+        mHandlerOfFadeOutAnimation.removeCallbacks(mRunnableOfFadeOutAnimation);
+        mHandlerOfFadeOutAnimation.postDelayed(mRunnableOfFadeOutAnimation, 7500);
+    }
+
+    /**
+     * Order the service to start playback Shows loading dialog which, if canceled, will also finish activity
      */
     private void startPlayback() {
         Intent i = new Intent(RadioPlayerActivity.this, RadioPlayerService.class);
         i.setAction(RadioPlayerService.ACTION_PLAY);
         i.putExtra(EXTRA_RADIO, mRadioChannel);
         startService(i);
-        
+
         bindListener();
-        
+
         AlertDialog.Builder b = new Builder(this);
-        mLoadingDialog = b.setTitle("Loading channel")
-                .setMessage("Please wait while we open radio stream")
+        mLoadingDialog = b.setTitle("Loading channel").setMessage("Please wait while we open radio stream")
                 .setOnCancelListener(new OnCancelListener() {
                     @Override
                     public void onCancel(DialogInterface dialog) {
@@ -411,7 +401,7 @@ public class RadioPlayerActivity extends Activity {
                 }).create();
         mLoadingDialog.show();
     }
-    
+
     /**
      * Order the service to bind to listener
      */
@@ -419,7 +409,7 @@ public class RadioPlayerActivity extends Activity {
         Intent i = new Intent(RadioPlayerActivity.this, RadioPlayerService.class);
         i.setAction(RadioPlayerService.ACTION_BIND);
         i.putExtra(EXTRA_RADIO, mRadioChannel);
-        startService(i);        
+        startService(i);
     }
 
     /**
@@ -433,16 +423,21 @@ public class RadioPlayerActivity extends Activity {
     }
 
     /**
-     * Initialize views from playlist 
+     * Initialize views from playlist
+     * 
      * @param playlistEntry
      */
     private void setupFromEntry(PlaylistEntry playlistEntry) {
         mCurrentTrack = playlistEntry;
         mArtistTextView.setText(playlistEntry.getAlbum().getArtistName());
         mSongTextView.setText(playlistEntry.getTrack().getName());
-//		mCurrentTimeTextView.setText(Helper.secondsToString(0));
+        // mCurrentTimeTextView.setText(Helper.secondsToString(0));
         mTotalTimeTextView.setText(Helper.secondsToString(playlistEntry.getTrack().getDuration()));
-        mCoverImageView.setImageUrl(playlistEntry.getAlbum().getImage().replaceAll("1.100.jpg", mBetterRes)); // Get higher resolution image 300x300
-		mCoverImageView.performClick();
+        mCoverImageView.setImageUrl(playlistEntry.getAlbum().getImage().replaceAll("1.100.jpg", mBetterRes)); // Get
+                                                                                                              // higher
+                                                                                                              // resolution
+                                                                                                              // image
+                                                                                                              // 300x300
+        mCoverImageView.performClick();
     }
 }
