@@ -166,7 +166,9 @@ public class RadioPlayerService extends Service {
         return mBinder;
     }
 
-    private void showNotifcation(PlaylistEntry entry) {
+    private void showNotification(PlaylistEntry entry) {
+        mCurrentEntry = entry;
+        
         String notificationMessage = entry.getAlbum().getArtistName() + " - " + entry.getTrack().getName();
 
         Notification notification = new Notification(R.drawable.stat_notify, notificationMessage,
@@ -176,7 +178,7 @@ public class RadioPlayerService extends Service {
         i.putExtra(EXTRA_PLAYLISTENTRY, mCurrentEntry);
         i.putExtra(RadioPlayerActivity.EXTRA_RADIO, mRadio);
 
-        PendingIntent contentIntent = PendingIntent.getActivity(this, 0, i, 0);
+        PendingIntent contentIntent = PendingIntent.getActivity(this, PLAYING_NOTIFY_ID, i, 0);
 
         notification.setLatestEventInfo(this, "Jamendo Player", notificationMessage, contentIntent);
         notification.flags |= Notification.FLAG_ONGOING_EVENT;
@@ -197,11 +199,14 @@ public class RadioPlayerService extends Service {
 
         @Override
         public void onTrackBuffering(int percent) {
+            if(mRemoteEngineListener != null){
+                mRemoteEngineListener.onTrackBuffering(percent);
+            }
         }
 
         @Override
         public void onTrackChanged(PlaylistEntry playlistEntry) {
-            showNotifcation(playlistEntry);
+            showNotification(playlistEntry);
 
             if (mRemoteEngineListener != null) {
                 mRemoteEngineListener.onTrackChanged(playlistEntry);
@@ -233,6 +238,8 @@ public class RadioPlayerService extends Service {
 
         @Override
         public boolean onTrackStart() {
+            Log.d(TAG, "LocalEngineListener::onTrackStart()");
+            
             // prevent killing this service
             // NO-OP setForeground(true);
             mWifiLock.acquire();

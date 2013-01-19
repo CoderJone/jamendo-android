@@ -146,6 +146,10 @@ public class RadioPlayerEngineImpl implements PlayerEngine {
 
         mHandler.removeMessages(MSG_UPDATE_META);
         mHandler.removeMessages(MSG_TRACK_CHANGE);
+        if (mCurrentUpdateTask != null) {
+            mCurrentUpdateTask.cancel(true);
+            mCurrentUpdateTask = null;
+        }
         
         if (mPlayerEngineListener != null) {
             mPlayerEngineListener.onTrackStop();
@@ -231,6 +235,7 @@ public class RadioPlayerEngineImpl implements PlayerEngine {
                 }
 
                 mPlayerEngineListener.onTrackStart();
+                mHandler.sendEmptyMessage(MSG_UPDATE_META);
                 
                 play();
             }
@@ -251,8 +256,6 @@ public class RadioPlayerEngineImpl implements PlayerEngine {
         mPlayerNewRadio = false;
         player.setDataSource(mRadio.getStreamUrl());
         player.prepareAsync();
-        
-        mHandler.sendEmptyMessage(MSG_UPDATE_META);
         
         return player;
     }

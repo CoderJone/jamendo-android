@@ -18,6 +18,7 @@ package com.teleca.jamendo.activity;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.app.AlertDialog.Builder;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -197,8 +198,10 @@ public class RadioPlayerActivity extends Activity {
 
         // if entry's not null then we're started from service and already playing
         PlaylistEntry entry = (PlaylistEntry) getIntent().getSerializableExtra(RadioPlayerService.EXTRA_PLAYLISTENTRY);
+        RadioChannel channel = (RadioChannel) getIntent().getSerializableExtra(EXTRA_RADIO);
         if (entry != null) {
             setupFromEntry(entry);
+            mRadioChannel = channel;
         }
     }
 
@@ -312,6 +315,10 @@ public class RadioPlayerActivity extends Activity {
         @Override
         public void onTrackChanged(PlaylistEntry playlistEntry) {
             setupFromEntry(playlistEntry);
+            
+            if (mLoadingDialog != null && mLoadingDialog.isShowing()) {
+                mLoadingDialog.dismiss();
+            }
         }
 
         @Override
@@ -335,9 +342,6 @@ public class RadioPlayerActivity extends Activity {
         public boolean onTrackStart() {
             Log.d(JamendoApplication.TAG, "RadioPlayerActivity::onTrackStart()");
 
-            if (mLoadingDialog != null && mLoadingDialog.isShowing()) {
-                mLoadingDialog.dismiss();
-            }
             mPlayImageButton.setImageResource(R.drawable.player_pause_light);
             return true;
         }
@@ -390,15 +394,16 @@ public class RadioPlayerActivity extends Activity {
 
         bindListener();
 
-        AlertDialog.Builder b = new Builder(this);
-        mLoadingDialog = b.setTitle("Loading channel").setMessage("Please wait while we open radio stream")
-                .setOnCancelListener(new OnCancelListener() {
-                    @Override
-                    public void onCancel(DialogInterface dialog) {
-                        stopPlayback();
-                        RadioPlayerActivity.this.finish();
-                    }
-                }).create();
+        mLoadingDialog = new ProgressDialog(this);
+        mLoadingDialog.setCancelable(true);
+        mLoadingDialog.setOnCancelListener(new OnCancelListener() {
+            @Override
+            public void onCancel(DialogInterface dialog) {
+                stopPlayback();
+                RadioPlayerActivity.this.finish();
+            }
+        });
+        mLoadingDialog.setTitle("Loading channel");
         mLoadingDialog.show();
     }
 
@@ -439,5 +444,13 @@ public class RadioPlayerActivity extends Activity {
                                                                                                               // image
                                                                                                               // 300x300
         mCoverImageView.performClick();
+
+        if (getPlayerEngine() != null) {
+            if (getPlayerEngine().isPlaying()) {
+                mPlayImageButton.setImageResource(R.drawable.player_pause_light);
+            } else {
+                mPlayImageButton.setImageResource(R.drawable.player_play_light);
+            }
+        }
     }
 }
