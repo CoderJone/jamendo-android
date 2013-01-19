@@ -16,37 +16,16 @@
 
 package com.teleca.jamendo.service;
 
-import java.io.IOException;
-import java.lang.ref.WeakReference;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.ClientProtocolException;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.DefaultHttpClient;
-import org.apache.http.util.EntityUtils;
-import org.w3c.dom.Document;
-
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.media.AudioManager;
-import android.media.MediaPlayer;
-import android.media.MediaPlayer.OnPreparedListener;
 import android.net.wifi.WifiManager;
 import android.net.wifi.WifiManager.WifiLock;
-import android.os.AsyncTask;
 import android.os.Binder;
-import android.os.Handler;
 import android.os.IBinder;
-import android.os.Message;
 import android.preference.PreferenceManager;
 import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
@@ -56,13 +35,9 @@ import com.teleca.jamendo.JamendoApplication;
 import com.teleca.jamendo.R;
 import com.teleca.jamendo.activity.RadioActivity.RadioChannel;
 import com.teleca.jamendo.activity.RadioPlayerActivity;
-import com.teleca.jamendo.api.Album;
 import com.teleca.jamendo.api.Playlist;
 import com.teleca.jamendo.api.PlaylistEntry;
-import com.teleca.jamendo.api.Track;
-import com.teleca.jamendo.api.util.XMLUtil;
 import com.teleca.jamendo.media.PlayerEngine;
-import com.teleca.jamendo.media.PlayerEngineImpl;
 import com.teleca.jamendo.media.PlayerEngineListener;
 import com.teleca.jamendo.media.RadioPlayerEngineImpl;
 

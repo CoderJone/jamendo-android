@@ -96,6 +96,13 @@ public class RadioPlayerEngineImpl implements PlayerEngine {
         }
 
         try {
+            if (mPlayer == null) {
+                mPlayer = build();
+                JamendoApplication.getInstance().setMyCurrentMedia(mPlayer);
+                
+                return;
+            }
+            
             if ((mPlayer.isPlaying() && mPlayerNewRadio) || mPlayerPreparing) {
                 mPlayer.stop();
                 mPlayer.release();
@@ -242,8 +249,8 @@ public class RadioPlayerEngineImpl implements PlayerEngine {
         
         mPlayerPreparing = true;
         mPlayerNewRadio = false;
-        mPlayer.setDataSource(mRadio.getStreamUrl());
-        mPlayer.prepareAsync();
+        player.setDataSource(mRadio.getStreamUrl());
+        player.prepareAsync();
         
         mHandler.sendEmptyMessage(MSG_UPDATE_META);
         
