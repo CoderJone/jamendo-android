@@ -19,7 +19,6 @@ package com.teleca.jamendo.activity;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
-import android.app.AlertDialog.Builder;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.DialogInterface.OnCancelListener;
@@ -43,9 +42,7 @@ import com.teleca.jamendo.JamendoApplication;
 import com.teleca.jamendo.R;
 import com.teleca.jamendo.activity.RadioActivity.RadioChannel;
 import com.teleca.jamendo.api.PlaylistEntry;
-import com.teleca.jamendo.api.Track;
 import com.teleca.jamendo.media.PlayerEngine;
-import com.teleca.jamendo.media.PlayerEngineImpl;
 import com.teleca.jamendo.media.PlayerEngineListener;
 import com.teleca.jamendo.media.RadioPlayerEngineImpl;
 import com.teleca.jamendo.service.PlayerService;
@@ -64,7 +61,7 @@ import com.teleca.jamendo.widget.RemoteImageView;
 public class RadioPlayerActivity extends Activity {
     public static String EXTRA_RADIO = "RadioChannelExtra";
 
-    private PlayerEngine getPlayerEngine() {
+    PlayerEngine getPlayerEngine() {
         return JamendoApplication.getInstance().getPlayerEngineInterface();
     };
 
@@ -198,7 +195,7 @@ public class RadioPlayerActivity extends Activity {
             }
 
         });
-        
+
         // if entry's not null then we're started from service and already playing
         PlaylistEntry entry = (PlaylistEntry) getIntent().getSerializableExtra(RadioPlayerService.EXTRA_PLAYLISTENTRY);
         if (entry != null) {
@@ -294,7 +291,8 @@ public class RadioPlayerActivity extends Activity {
             if (getPlayerEngine().isPlaying()) {
                 getPlayerEngine().pause();
             } else {
-                getPlayerEngine().play();
+                startPlayback();
+                // getPlayerEngine().play();
             }
         }
 
@@ -335,13 +333,19 @@ public class RadioPlayerActivity extends Activity {
 
         @Override
         public void onTrackBuffering(int percent) {
+            Log.d(JamendoApplication.TAG, "RadioPlayerActivity::onTrackBuffering is " + Integer.toString(percent));
+            
             // int secondaryProgress = (int) (((float)percent/100)*mProgressBar.getMax());
             // mProgressBar.setSecondaryProgress(secondaryProgress);
+            if (mLoadingDialog != null && mLoadingDialog.isShowing() && percent >= 100) {
+                mLoadingDialog.dismiss();
+            }
         }
 
         @Override
         public void onTrackStop() {
             mPlayImageButton.setImageResource(R.drawable.player_play_light);
+            mLoadingDialog = null;
         }
 
         @Override
@@ -349,6 +353,22 @@ public class RadioPlayerActivity extends Activity {
             Log.d(JamendoApplication.TAG, "RadioPlayerActivity::onTrackStart()");
 
             mPlayImageButton.setImageResource(R.drawable.player_pause_light);
+
+            if (mLoadingDialog == null) {
+                mLoadingDialog = new ProgressDialog(RadioPlayerActivity.this);
+                mLoadingDialog.setCancelable(true);
+                mLoadingDialog.setOnCancelListener(new OnCancelListener() {
+                    @Override
+                    public void onCancel(DialogInterface dialog) {
+                        stopPlayback();
+                        RadioPlayerActivity.this.finish();
+                    }
+                });
+                mLoadingDialog.setTitle(R.string.label_loading_radio_channel);
+                mLoadingDialog.setMessage(getResources().getText(R.string.message_loading_radio_channel));
+                mLoadingDialog.show();
+            }
+            
             return true;
         }
 
@@ -393,25 +413,12 @@ public class RadioPlayerActivity extends Activity {
      * Order the service to start playback Shows loading dialog which, if canceled, will also finish activity
      */
     private void startPlayback() {
+        bindListener();
+
         Intent i = new Intent(RadioPlayerActivity.this, RadioPlayerService.class);
         i.setAction(PlayerService.ACTION_PLAY);
         i.putExtra(EXTRA_RADIO, mRadioChannel);
         startService(i);
-
-        bindListener();
-
-        mLoadingDialog = new ProgressDialog(this);
-        mLoadingDialog.setCancelable(true);
-        mLoadingDialog.setOnCancelListener(new OnCancelListener() {
-            @Override
-            public void onCancel(DialogInterface dialog) {
-                stopPlayback();
-                RadioPlayerActivity.this.finish();
-            }
-        });
-        mLoadingDialog.setTitle(R.string.label_loading_radio_channel);
-        mLoadingDialog.setMessage(getResources().getText(R.string.message_loading_radio_channel));
-        mLoadingDialog.show();
     }
 
     /**

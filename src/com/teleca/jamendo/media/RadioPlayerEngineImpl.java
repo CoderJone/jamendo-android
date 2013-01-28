@@ -129,7 +129,10 @@ public class RadioPlayerEngineImpl implements PlayerEngine {
 
     @Override
     public boolean isPlaying() {
-        return mPlayer.isPlaying();
+        if (mPlayer != null) {
+            return mPlayer.isPlaying();
+        }
+        return false;
     }
 
     @Override
@@ -140,6 +143,7 @@ public class RadioPlayerEngineImpl implements PlayerEngine {
             } catch (IllegalStateException e) {
                 // this may happen sometimes
             } finally {
+                mPlayer.reset();
                 mPlayer.release();
                 mPlayer = null;
             }
