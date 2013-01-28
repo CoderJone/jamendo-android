@@ -105,6 +105,7 @@ public class RadioPlayerEngineImpl implements PlayerEngine {
             
             if ((mPlayer.isPlaying() && mPlayerNewRadio) || mPlayerPreparing) {
                 mPlayer.stop();
+                mPlayer.reset();
                 mPlayer.release();
 
                 mHandler.removeMessages(MSG_UPDATE_META);

@@ -147,7 +147,15 @@ public class JamendoApplication extends Application {
 	 * @param playerEngine
 	 */
 	public void setConcretePlayerEngine(PlayerEngine playerEngine) {
+	    // add some logic since there are two concrete implementations now.
+	    if (this.mServicePlayerEngine != null && this.mServicePlayerEngine != playerEngine) {
+	        this.mServicePlayerEngine.stop();
+	    }
 		this.mServicePlayerEngine = playerEngine;
+	}
+	
+	public PlayerEngine getConcretePlayerEngine() {
+	    return mServicePlayerEngine;
 	}
 	
 	public void setMyCurrentMedia(MediaPlayer player){

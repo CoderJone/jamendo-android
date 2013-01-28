@@ -44,10 +44,6 @@ import com.teleca.jamendo.media.RadioPlayerEngineImpl;
 public class RadioPlayerService extends Service {
     private static final String TAG = "Jamendo RadioPlayerService";
 
-    public static final String ACTION_PLAY = "play";
-    public static final String ACTION_STOP = "stop";
-    public static final String ACTION_BIND = "bind_listener";
-
     public static final String EXTRA_PLAYLISTENTRY = "extra_playlistentry";
 
     private WifiManager mWifiManager;
@@ -112,12 +108,12 @@ public class RadioPlayerService extends Service {
 
         Log.i(JamendoApplication.TAG, "Radio Player Service onStart - " + action);
 
-        if (action.equals(ACTION_STOP)) {
+        if (action.equals(PlayerService.ACTION_STOP)) {
             this.stopSelf();
             return START_NOT_STICKY;
         }
 
-        if (action.equals(ACTION_BIND)) {
+        if (action.equals(PlayerService.ACTION_BIND_LISTENER)) {
             Log.d(TAG, "onStartCommand::bind listener");
             mRemoteEngineListener = JamendoApplication.getInstance().fetchPlayerEngineListener();
             return START_NOT_STICKY;
@@ -125,7 +121,7 @@ public class RadioPlayerService extends Service {
 
         updatePlaylist(intent);
 
-        if (action.equals(ACTION_PLAY)) {
+        if (action.equals(PlayerService.ACTION_PLAY)) {
             mPlayerEngine.play();
 
             return START_NOT_STICKY;
@@ -169,15 +165,16 @@ public class RadioPlayerService extends Service {
     private void showNotification(PlaylistEntry entry) {
         mCurrentEntry = entry;
         
-        String notificationMessage = entry.getAlbum().getArtistName() + " - " + entry.getTrack().getName();
+        String notificationMessage = mRadio.getTitle() + ": " + entry.getAlbum().getArtistName() + " - " + entry.getTrack().getName();
 
         Notification notification = new Notification(R.drawable.stat_notify, notificationMessage,
                 System.currentTimeMillis());
 
         Intent i = new Intent(this, RadioPlayerActivity.class);
+        i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         i.putExtra(EXTRA_PLAYLISTENTRY, mCurrentEntry);
         i.putExtra(RadioPlayerActivity.EXTRA_RADIO, mRadio);
-
+        
         PendingIntent contentIntent = PendingIntent.getActivity(this, PLAYING_NOTIFY_ID, i, 0);
 
         notification.setLatestEventInfo(this, "Jamendo Player", notificationMessage, contentIntent);

@@ -155,4 +155,6 @@ limitations under the License.
     <string name="equalizer">Equalizer</string>
     <string name="custom">Custom</string>
     <string name="radio_channels">Radio channels</string>
+    <string name="label_loading_radio_channel">Loading radio channel</string>
+    <string name="message_loading_radio_channel">Please wait while streaming is prepared.</string>
 </resources>

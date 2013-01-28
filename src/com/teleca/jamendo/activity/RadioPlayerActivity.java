@@ -45,7 +45,10 @@ import com.teleca.jamendo.activity.RadioActivity.RadioChannel;
 import com.teleca.jamendo.api.PlaylistEntry;
 import com.teleca.jamendo.api.Track;
 import com.teleca.jamendo.media.PlayerEngine;
+import com.teleca.jamendo.media.PlayerEngineImpl;
 import com.teleca.jamendo.media.PlayerEngineListener;
+import com.teleca.jamendo.media.RadioPlayerEngineImpl;
+import com.teleca.jamendo.service.PlayerService;
 import com.teleca.jamendo.service.RadioPlayerService;
 import com.teleca.jamendo.util.Helper;
 import com.teleca.jamendo.util.SeekToMode;
@@ -195,13 +198,11 @@ public class RadioPlayerActivity extends Activity {
             }
 
         });
-
+        
         // if entry's not null then we're started from service and already playing
         PlaylistEntry entry = (PlaylistEntry) getIntent().getSerializableExtra(RadioPlayerService.EXTRA_PLAYLISTENTRY);
-        RadioChannel channel = (RadioChannel) getIntent().getSerializableExtra(EXTRA_RADIO);
         if (entry != null) {
             setupFromEntry(entry);
-            mRadioChannel = channel;
         }
     }
 
@@ -209,6 +210,11 @@ public class RadioPlayerActivity extends Activity {
     public void onResume() {
         super.onResume();
         Log.i(JamendoApplication.TAG, "RadioPlayerActivity.onResume");
+
+        PlayerEngine pe = JamendoApplication.getInstance().getConcretePlayerEngine();
+        if (!(pe instanceof RadioPlayerEngineImpl)) {
+            JamendoApplication.getInstance().setConcretePlayerEngine(null);
+        }
 
         JamendoApplication.getInstance().setPlayerEngineListener(mPlayerEngineListener);
 
@@ -315,7 +321,7 @@ public class RadioPlayerActivity extends Activity {
         @Override
         public void onTrackChanged(PlaylistEntry playlistEntry) {
             setupFromEntry(playlistEntry);
-            
+
             if (mLoadingDialog != null && mLoadingDialog.isShowing()) {
                 mLoadingDialog.dismiss();
             }
@@ -388,7 +394,7 @@ public class RadioPlayerActivity extends Activity {
      */
     private void startPlayback() {
         Intent i = new Intent(RadioPlayerActivity.this, RadioPlayerService.class);
-        i.setAction(RadioPlayerService.ACTION_PLAY);
+        i.setAction(PlayerService.ACTION_PLAY);
         i.putExtra(EXTRA_RADIO, mRadioChannel);
         startService(i);
 
@@ -403,7 +409,8 @@ public class RadioPlayerActivity extends Activity {
                 RadioPlayerActivity.this.finish();
             }
         });
-        mLoadingDialog.setTitle("Loading channel");
+        mLoadingDialog.setTitle(R.string.label_loading_radio_channel);
+        mLoadingDialog.setMessage(getResources().getText(R.string.message_loading_radio_channel));
         mLoadingDialog.show();
     }
 
@@ -412,7 +419,7 @@ public class RadioPlayerActivity extends Activity {
      */
     private void bindListener() {
         Intent i = new Intent(RadioPlayerActivity.this, RadioPlayerService.class);
-        i.setAction(RadioPlayerService.ACTION_BIND);
+        i.setAction(PlayerService.ACTION_BIND_LISTENER);
         i.putExtra(EXTRA_RADIO, mRadioChannel);
         startService(i);
     }
@@ -422,7 +429,7 @@ public class RadioPlayerActivity extends Activity {
      */
     private void stopPlayback() {
         Intent i = new Intent(RadioPlayerActivity.this, RadioPlayerService.class);
-        i.setAction(RadioPlayerService.ACTION_STOP);
+        i.setAction(PlayerService.ACTION_STOP);
         i.putExtra(EXTRA_RADIO, mRadioChannel);
         startService(i);
     }
