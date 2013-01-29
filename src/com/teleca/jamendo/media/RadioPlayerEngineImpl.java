@@ -21,6 +21,7 @@ import org.w3c.dom.Document;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.MediaPlayer.OnBufferingUpdateListener;
+import android.media.MediaPlayer.OnErrorListener;
 import android.media.MediaPlayer.OnPreparedListener;
 import android.os.AsyncTask;
 import android.os.Handler;
@@ -239,10 +240,23 @@ public class RadioPlayerEngineImpl implements PlayerEngine {
                     return;
                 }
 
-                mPlayerEngineListener.onTrackStart();
-                mHandler.sendEmptyMessage(MSG_UPDATE_META);
-                
                 play();
+
+                if (mPlayerEngineListener != null) {
+                    mPlayerEngineListener.onTrackStart();
+                }
+                mHandler.sendEmptyMessage(MSG_UPDATE_META);
+            }
+        });
+
+        player.setOnErrorListener(new OnErrorListener() {
+            
+            @Override
+            public boolean onError(MediaPlayer mp, int what, int extra) {
+                if (mPlayerEngineListener != null) {
+                    mPlayerEngineListener.onTrackStreamError();
+                }
+                return false;
             }
         });
         
@@ -329,7 +343,9 @@ public class RadioPlayerEngineImpl implements PlayerEngine {
             try {
                 responsePost = client.execute(get);
                 HttpEntity resEntity = responsePost.getEntity();
-                doc = XMLUtil.stringToDocument(EntityUtils.toString(resEntity));
+                String docString = EntityUtils.toString(resEntity);
+                doc = XMLUtil.stringToDocument(docString);
+                Log.d(TAG, "META: " + docString);
             } catch (ClientProtocolException e) {
                 e.printStackTrace();
                 // return 5s for next update

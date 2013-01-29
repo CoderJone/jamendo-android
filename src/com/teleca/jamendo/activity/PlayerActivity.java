@@ -50,6 +50,7 @@ import android.widget.Toast;
 
 import com.teleca.jamendo.JamendoApplication;
 import com.teleca.jamendo.R;
+import com.teleca.jamendo.JamendoApplication.PlayerClass;
 import com.teleca.jamendo.api.Album;
 import com.teleca.jamendo.api.JamendoGet2Api;
 import com.teleca.jamendo.api.License;
@@ -184,6 +185,8 @@ public class PlayerActivity extends Activity {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         setContentView(R.layout.player);
 
+        JamendoApplication.getInstance().setPlayerClass(PlayerClass.TRACK);
+        
         // XML binding
         mBetterRes = getResources().getString(R.string.better_res);
 

@@ -122,6 +122,7 @@ public class RadioPlayerService extends Service {
         updatePlaylist(intent);
 
         if (action.equals(PlayerService.ACTION_PLAY)) {
+            mNotificationManager.cancel(PLAYING_NOTIFY_ID);
             mPlayerEngine.play();
 
             return START_NOT_STICKY;
@@ -163,6 +164,8 @@ public class RadioPlayerService extends Service {
     }
 
     private void showNotification(PlaylistEntry entry) {
+        mNotificationManager.cancel(PLAYING_NOTIFY_ID);
+        
         mCurrentEntry = entry;
         
         String notificationMessage = mRadio.getTitle() + ": " + entry.getAlbum().getArtistName() + " - " + entry.getTrack().getName();
@@ -172,10 +175,10 @@ public class RadioPlayerService extends Service {
 
         Intent i = new Intent(this, RadioPlayerActivity.class);
         i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        i.putExtra(EXTRA_PLAYLISTENTRY, mCurrentEntry);
+        i.putExtra(EXTRA_PLAYLISTENTRY, entry);
         i.putExtra(RadioPlayerActivity.EXTRA_RADIO, mRadio);
         
-        PendingIntent contentIntent = PendingIntent.getActivity(this, PLAYING_NOTIFY_ID, i, 0);
+        PendingIntent contentIntent = PendingIntent.getActivity(this, PLAYING_NOTIFY_ID, i, Intent.FLAG_ACTIVITY_NEW_TASK);
 
         notification.setLatestEventInfo(this, "Jamendo Player", notificationMessage, contentIntent);
         notification.flags |= Notification.FLAG_ONGOING_EVENT;

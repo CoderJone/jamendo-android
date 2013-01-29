@@ -40,6 +40,7 @@ import android.widget.Toast;
 
 import com.teleca.jamendo.JamendoApplication;
 import com.teleca.jamendo.R;
+import com.teleca.jamendo.JamendoApplication.PlayerClass;
 import com.teleca.jamendo.activity.RadioActivity.RadioChannel;
 import com.teleca.jamendo.api.PlaylistEntry;
 import com.teleca.jamendo.media.PlayerEngine;
@@ -109,6 +110,8 @@ public class RadioPlayerActivity extends Activity {
 
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         setContentView(R.layout.radio_player);
+
+        JamendoApplication.getInstance().setPlayerClass(PlayerClass.RADIO);
 
         mRadioChannel = (RadioChannel) getIntent().getSerializableExtra(EXTRA_RADIO);
 
@@ -199,6 +202,7 @@ public class RadioPlayerActivity extends Activity {
         // if entry's not null then we're started from service and already playing
         PlaylistEntry entry = (PlaylistEntry) getIntent().getSerializableExtra(RadioPlayerService.EXTRA_PLAYLISTENTRY);
         if (entry != null) {
+            mRadioChannel = (RadioChannel) getIntent().getSerializableExtra(RadioPlayerActivity.EXTRA_RADIO);
             setupFromEntry(entry);
         }
     }
@@ -333,13 +337,11 @@ public class RadioPlayerActivity extends Activity {
 
         @Override
         public void onTrackBuffering(int percent) {
-            Log.d(JamendoApplication.TAG, "RadioPlayerActivity::onTrackBuffering is " + Integer.toString(percent));
-            
-            // int secondaryProgress = (int) (((float)percent/100)*mProgressBar.getMax());
-            // mProgressBar.setSecondaryProgress(secondaryProgress);
-            if (mLoadingDialog != null && mLoadingDialog.isShowing() && percent >= 100) {
-                mLoadingDialog.dismiss();
-            }
+//            int secondaryProgress = (int) ((float)percent/100);
+//            mProgressBar.setSecondaryProgress(secondaryProgress);
+//            if (mLoadingDialog != null && mLoadingDialog.isShowing()) {
+//                mLoadingDialog.dismiss();
+//            }
         }
 
         @Override
@@ -368,7 +370,7 @@ public class RadioPlayerActivity extends Activity {
                 mLoadingDialog.setMessage(getResources().getText(R.string.message_loading_radio_channel));
                 mLoadingDialog.show();
             }
-            
+
             return true;
         }
 
