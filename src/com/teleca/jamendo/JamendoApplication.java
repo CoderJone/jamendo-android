@@ -25,6 +25,7 @@ import android.media.MediaPlayer;
 import android.media.audiofx.Equalizer;
 import android.media.audiofx.Equalizer.Settings;
 import android.preference.PreferenceManager;
+import android.util.Log;
 
 import com.teleca.jamendo.activity.EqualizerActivity;
 import com.teleca.jamendo.api.JamendoGet2Api;
@@ -351,6 +352,7 @@ public class JamendoApplication extends Application {
 		@Override
 		public boolean isPlaying() {
 			if (mServicePlayerEngine == null) {
+			    Log.e(TAG, "isPlaying() mServicePlayerEngine is null");
 				// service does not exist thus no playback possible
 				return false;
 			} else {
@@ -372,8 +374,10 @@ public class JamendoApplication extends Application {
 		public void openPlaylist(Playlist playlist) {
 			mPlaylist = playlist;
 			if(mServicePlayerEngine != null){
-				mServicePlayerEngine.openPlaylist(playlist);
+			    mServicePlayerEngine.stop();
+//				mServicePlayerEngine.openPlaylist(playlist);
 			}
+			startAction(PlayerService.ACTION_OPENPLAYLIST);
 		}
 
 		@Override

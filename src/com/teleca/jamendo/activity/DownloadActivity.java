@@ -42,6 +42,7 @@ import android.widget.AdapterView.AdapterContextMenuInfo;
 import android.widget.AdapterView.OnItemSelectedListener;
 
 import com.teleca.jamendo.JamendoApplication;
+import com.teleca.jamendo.JamendoApplication.PlayerClass;
 import com.teleca.jamendo.R;
 import com.teleca.jamendo.adapter.DownloadJobAdapter;
 import com.teleca.jamendo.api.Playlist;
@@ -127,7 +128,9 @@ public class DownloadActivity extends Activity implements DownloadObserver {
 
 	@Override
 	protected void onResume() {
-		mDownloadManager.registerDownloadObserver(this);
+        JamendoApplication.getInstance().setPlayerClass(PlayerClass.TRACK);
+
+        mDownloadManager.registerDownloadObserver(this);
 		boolean gesturesEnabled = PreferenceManager.getDefaultSharedPreferences(this).getBoolean("gestures", true);
 		mGestureOverlayView.setEnabled(gesturesEnabled);
 		super.onResume();

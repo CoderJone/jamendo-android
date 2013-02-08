@@ -60,6 +60,8 @@ import com.teleca.jamendo.widget.RemoteImageView;
  * @author Marcin Gil
  */
 public class RadioPlayerActivity extends Activity {
+    private static final String TAG = "RadioPlayerActivity";
+    
     public static String EXTRA_RADIO = "RadioChannelExtra";
 
     PlayerEngine getPlayerEngine() {
@@ -106,12 +108,10 @@ public class RadioPlayerActivity extends Activity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Log.i(JamendoApplication.TAG, "RadioPlayerActivity.onCreate");
+        Log.i(TAG, "RadioPlayerActivity.onCreate");
 
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         setContentView(R.layout.radio_player);
-
-        JamendoApplication.getInstance().setPlayerClass(PlayerClass.RADIO);
 
         mRadioChannel = (RadioChannel) getIntent().getSerializableExtra(EXTRA_RADIO);
 
@@ -210,7 +210,9 @@ public class RadioPlayerActivity extends Activity {
     @Override
     public void onResume() {
         super.onResume();
-        Log.i(JamendoApplication.TAG, "RadioPlayerActivity.onResume");
+        Log.i(TAG, "RadioPlayerActivity.onResume");
+
+        JamendoApplication.getInstance().setPlayerClass(PlayerClass.RADIO);
 
         PlayerEngine pe = JamendoApplication.getInstance().getConcretePlayerEngine();
         if (!(pe instanceof RadioPlayerEngineImpl)) {
@@ -231,7 +233,7 @@ public class RadioPlayerActivity extends Activity {
         JamendoApplication.getInstance().setPlayerEngineListener(null);
         bindListener();
 
-        Log.i(JamendoApplication.TAG, "RadioPlayerActivity.onPause");
+        Log.i(TAG, "RadioPlayerActivity.onPause");
     }
 
     /**
@@ -290,7 +292,7 @@ public class RadioPlayerActivity extends Activity {
 
         @Override
         public void onClick(View v) {
-            Log.d(JamendoApplication.TAG, "RadioPlayerActivity::PlayOnClick");
+            Log.d(TAG, "RadioPlayerActivity::PlayOnClick");
 
             if (getPlayerEngine().isPlaying()) {
                 getPlayerEngine().pause();
@@ -309,7 +311,7 @@ public class RadioPlayerActivity extends Activity {
 
         @Override
         public void onClick(View v) {
-            Log.d(JamendoApplication.TAG, "RadioPlayerActivity::StopOnClick");
+            Log.d(TAG, "RadioPlayerActivity::StopOnClick");
             stopPlayback();
         }
 
@@ -352,7 +354,7 @@ public class RadioPlayerActivity extends Activity {
 
         @Override
         public boolean onTrackStart() {
-            Log.d(JamendoApplication.TAG, "RadioPlayerActivity::onTrackStart()");
+            Log.d(TAG, "RadioPlayerActivity::onTrackStart()");
 
             mPlayImageButton.setImageResource(R.drawable.player_pause_light);
 
@@ -461,7 +463,9 @@ public class RadioPlayerActivity extends Activity {
                                                                                                               // 300x300
         mCoverImageView.performClick();
 
+        Log.d(TAG, "setupFromEntry getPlayerEngine is " + getPlayerEngine());
         if (getPlayerEngine() != null) {
+            Log.d(TAG, "setupFromEntry player is playing = " + Boolean.toString(getPlayerEngine().isPlaying()));
             if (getPlayerEngine().isPlaying()) {
                 mPlayImageButton.setImageResource(R.drawable.player_pause_light);
             } else {

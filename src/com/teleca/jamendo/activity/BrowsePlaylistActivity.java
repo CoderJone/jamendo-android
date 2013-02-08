@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import org.json.JSONException;
 
 import com.teleca.jamendo.JamendoApplication;
+import com.teleca.jamendo.JamendoApplication.PlayerClass;
 import com.teleca.jamendo.adapter.PurpleAdapter;
 import com.teleca.jamendo.adapter.PurpleEntry;
 import com.teleca.jamendo.adapter.SeparatedListAdapter;
@@ -31,6 +32,7 @@ import com.teleca.jamendo.api.WSError;
 import com.teleca.jamendo.api.impl.JamendoGet2ApiImpl;
 import com.teleca.jamendo.db.Database;
 import com.teleca.jamendo.db.DatabaseImpl;
+import com.teleca.jamendo.service.PlayerService;
 import com.teleca.jamendo.R;
 
 import android.app.Activity;
@@ -124,7 +126,7 @@ public class BrowsePlaylistActivity extends Activity {
 		super.onCreate(savedInstanceState);
 		requestWindowFeature(Window.FEATURE_NO_TITLE);
 		setContentView(R.layout.browse_playlist);
-
+		
 		mPlaylistsListView = (ListView)findViewById(R.id.PlaylistsListView);
 		mPlaylistsListView.setOnItemLongClickListener(mItemLongClick);
 		mButton = (Button)findViewById(R.id.BrowseButton);
@@ -140,7 +142,10 @@ public class BrowsePlaylistActivity extends Activity {
 	@Override
 	protected void onResume() {
 		super.onResume();
-		boolean gesturesEnabled = PreferenceManager.getDefaultSharedPreferences(this).getBoolean("gestures", true);
+        
+		JamendoApplication.getInstance().setPlayerClass(PlayerClass.TRACK);
+
+        boolean gesturesEnabled = PreferenceManager.getDefaultSharedPreferences(this).getBoolean("gestures", true);
 		mGestureOverlayView.setEnabled(gesturesEnabled);
 	}
 

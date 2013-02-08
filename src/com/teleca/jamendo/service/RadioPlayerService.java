@@ -104,6 +104,9 @@ public class RadioPlayerService extends Service {
             throw new IllegalArgumentException("Empty intent in RadioPlayerService");
         }
 
+        JamendoApplication.getInstance().setConcretePlayerEngine(mPlayerEngine);
+        mRemoteEngineListener = JamendoApplication.getInstance().fetchPlayerEngineListener();
+
         String action = intent.getAction();
 
         Log.i(JamendoApplication.TAG, "Radio Player Service onStart - " + action);
@@ -120,6 +123,11 @@ public class RadioPlayerService extends Service {
         }
 
         updatePlaylist(intent);
+
+        if (action.equals(PlayerService.ACTION_OPENPLAYLIST)) {
+            mPlayerEngine.openPlaylist(JamendoApplication.getInstance().fetchPlaylist());
+            return START_NOT_STICKY;
+        }
 
         if (action.equals(PlayerService.ACTION_PLAY)) {
             mNotificationManager.cancel(PLAYING_NOTIFY_ID);
