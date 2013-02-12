@@ -152,4 +152,5 @@ limitations under the License.
     <string name="failed_recomended_radios">Nie udało się pobrać rekomendowanych stacji</string>
     <string name="close">Zamknij</string>
     <string name="scrobbler_lastfm_official">Oficjalny scrobbler Last.FM</string>
+    <string name="radio_channels">Kanały radio</string>
 </resources>

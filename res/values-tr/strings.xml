@@ -148,4 +148,5 @@ limitations under the License.
     <string name="preference_3rdparty_title">Harici uygulamalar</string>
     <string name="preference_3rdparty_summary">Harici uygulamalar ile etkileşim</string>
     <string name="close">Kapat</string>
+    <string name="radio_channels">Radyo kanallarını</string>
 </resources>

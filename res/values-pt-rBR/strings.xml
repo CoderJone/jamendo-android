@@ -156,4 +156,5 @@
     <string name="jazz">Jazz</string>
     <string name="pop">Pop</string>
     <string name="custom">Personalizado</string>
+    <string name="radio_channels">Canais de rádio</string>
 </resources>

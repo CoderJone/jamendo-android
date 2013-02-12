@@ -25,6 +25,7 @@ import android.media.MediaPlayer;
 import android.media.audiofx.Equalizer;
 import android.media.audiofx.Equalizer.Settings;
 import android.preference.PreferenceManager;
+import android.util.Log;
 
 import com.teleca.jamendo.activity.EqualizerActivity;
 import com.teleca.jamendo.api.JamendoGet2Api;
@@ -37,6 +38,7 @@ import com.teleca.jamendo.gestures.PlayerGestureCommandRegiser;
 import com.teleca.jamendo.media.PlayerEngine;
 import com.teleca.jamendo.media.PlayerEngineListener;
 import com.teleca.jamendo.service.PlayerService;
+import com.teleca.jamendo.service.RadioPlayerService;
 import com.teleca.jamendo.util.ImageCache;
 import com.teleca.jamendo.util.download.DownloadManager;
 import com.teleca.jamendo.util.download.DownloadManagerImpl;
@@ -48,6 +50,12 @@ import com.teleca.jamendo.util.download.DownloadManagerImpl;
  */
 public class JamendoApplication extends Application {
 
+    public enum PlayerClass {
+        TRACK, RADIO;
+    }
+    
+    private PlayerClass playerClass;
+    
 	/**
 	 * Tag used for DDMS logging
 	 */
@@ -91,7 +99,7 @@ public class JamendoApplication extends Application {
 	/**
 	 * Intent player engine
 	 */
-	private PlayerEngine mIntentPlayerEngine;
+	private PlayerEngine mPlayerEngine;
 
 	/**
 	 * Player engine listener
@@ -147,7 +155,15 @@ public class JamendoApplication extends Application {
 	 * @param playerEngine
 	 */
 	public void setConcretePlayerEngine(PlayerEngine playerEngine) {
+	    // add some logic since there are two concrete implementations now.
+	    if (this.mServicePlayerEngine != null && this.mServicePlayerEngine != playerEngine) {
+	        this.mServicePlayerEngine.stop();
+	    }
 		this.mServicePlayerEngine = playerEngine;
+	}
+	
+	public PlayerEngine getConcretePlayerEngine() {
+	    return mServicePlayerEngine;
 	}
 	
 	public void setMyCurrentMedia(MediaPlayer player){
@@ -223,6 +239,18 @@ public class JamendoApplication extends Application {
 		return mEqualizerPreset;
 	}
 
+	public PlayerClass getPlayerClass() {
+	    return playerClass;
+	}
+
+	/**
+	 * Workaround IntentPlayerService tight coupling to PlayerService
+	 * @param clazz
+	 */
+	public void setPlayerClass(PlayerClass clazz) {
+	    playerClass = clazz;
+	}
+	
 	/**
 	 * This getter allows performing logical operations on the player engine's
 	 * interface from UI space
@@ -231,12 +259,12 @@ public class JamendoApplication extends Application {
 	 */
 	public PlayerEngine getPlayerEngineInterface() {
 		// request service bind
-		if (mIntentPlayerEngine == null) {
-			mIntentPlayerEngine = new IntentPlayerEngine();
+		if (mPlayerEngine == null) {
+			mPlayerEngine = new IntentPlayerEngine();
 		}
-		return mIntentPlayerEngine;
+		return mPlayerEngine;
 	}
-
+	
 	public GesturesHandler getPlayerGestureHandler(){
 		if(mPlayerGestureHandler == null){
 			mPlayerGestureHandler = new GesturesHandler(this, new PlayerGestureCommandRegiser(getPlayerEngineInterface()));
@@ -324,6 +352,7 @@ public class JamendoApplication extends Application {
 		@Override
 		public boolean isPlaying() {
 			if (mServicePlayerEngine == null) {
+			    Log.e(TAG, "isPlaying() mServicePlayerEngine is null");
 				// service does not exist thus no playback possible
 				return false;
 			} else {
@@ -345,8 +374,10 @@ public class JamendoApplication extends Application {
 		public void openPlaylist(Playlist playlist) {
 			mPlaylist = playlist;
 			if(mServicePlayerEngine != null){
-				mServicePlayerEngine.openPlaylist(playlist);
+			    mServicePlayerEngine.stop();
+//				mServicePlayerEngine.openPlaylist(playlist);
 			}
+			startAction(PlayerService.ACTION_OPENPLAYLIST);
 		}
 
 		@Override
@@ -381,7 +412,7 @@ public class JamendoApplication extends Application {
 			mPlayerEngineListener = playerEngineListener;
 			// we do not want to set this listener if Service
 			// is not up and a new listener is null
-			if (mServicePlayerEngine != null || mPlayerEngineListener != null) {
+			if (playerEngineListener != null) {
 				startAction(PlayerService.ACTION_BIND_LISTENER);
 			}
 		}
@@ -401,8 +432,21 @@ public class JamendoApplication extends Application {
 		}
 
 		private void startAction(String action) {
-			Intent intent = new Intent(JamendoApplication.this,
-					PlayerService.class);
+		    Class<?> c;
+		    
+		    if (playerClass == null) {
+		        throw new IllegalStateException("Player class cannot be null");
+		    }
+		    switch (playerClass) {
+		    case TRACK:
+		        c = PlayerService.class; break;
+		    case RADIO:
+		        c = RadioPlayerService.class; break;
+		    default:
+		        throw new IllegalStateException("Unknown player class");
+		    }
+		    
+			Intent intent = new Intent(JamendoApplication.this, c);
 			intent.setAction(action);
 			startService(intent);
 		}
@@ -456,4 +500,5 @@ public class JamendoApplication extends Application {
 		}
 		
 	}
+
 }

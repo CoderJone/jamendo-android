@@ -44,279 +44,287 @@ import android.util.Log;
  * @author Lukasz Wisniewski
  * @author Marcin Gil
  */
-public class PlayerService extends Service{
-	
-	public static final String ACTION_PLAY = "play";
-	public static final String ACTION_NEXT = "next";
-	public static final String ACTION_PREV = "prev";
-	public static final String ACTION_STOP = "stop";
-	public static final String ACTION_BIND_LISTENER = "bind_listener";
+public class PlayerService extends Service {
 
-	private WifiManager mWifiManager;
-	private WifiLock mWifiLock;
-	private PlayerEngine mPlayerEngine;
-	private TelephonyManager mTelephonyManager;
-	private PhoneStateListener mPhoneStateListener;
-	private NotificationManager mNotificationManager = null;
-	private static final int PLAYING_NOTIFY_ID = 667667;
+    public static final String ACTION_PLAY = "play";
+    public static final String ACTION_NEXT = "next";
+    public static final String ACTION_PREV = "prev";
+    public static final String ACTION_STOP = "stop";
+    public static final String ACTION_OPENPLAYLIST = "open_playlist";
+    public static final String ACTION_BIND_LISTENER = "bind_listener";
 
-	private static final String LASTFM_INTENT = "fm.last.android.metachanged";
-	private static final String SIMPLEFM_INTENT = "com.adam.aslfms.notify.playstatechanged";
-	
-	@Override
-	public IBinder onBind(Intent intent) {
-		return null;
-	}
+    private WifiManager mWifiManager;
+    private WifiLock mWifiLock;
+    private PlayerEngine mPlayerEngine;
+    private TelephonyManager mTelephonyManager;
+    private PhoneStateListener mPhoneStateListener;
+    private NotificationManager mNotificationManager = null;
+    private static final int PLAYING_NOTIFY_ID = 667667;
 
-	@Override
-	public void onCreate()
-	{
-		Log.i(JamendoApplication.TAG, "Player Service onCreate");
-		
-		// All necessary Application <-> Service pre-setup goes in here
-		
-		mPlayerEngine = new PlayerEngineImpl();
-		mPlayerEngine.setListener(mLocalEngineListener);
+    private static final String LASTFM_INTENT = "fm.last.android.metachanged";
+    private static final String SIMPLEFM_INTENT = "com.adam.aslfms.notify.playstatechanged";
 
-		mTelephonyManager = (TelephonyManager)this.getSystemService(Context.TELEPHONY_SERVICE);
-		mPhoneStateListener = new PhoneStateListener(){
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
 
-			@Override
-			public void onCallStateChanged(int state, String incomingNumber) 
-			{
-				Log.e(JamendoApplication.TAG, "onCallStateChanged");
-				if (state == TelephonyManager.CALL_STATE_IDLE)
-				{
-					// resume playback
-				} else { 
-					if(mPlayerEngine != null){
-						mPlayerEngine.pause();
-					}
-				}
-			}
+    @Override
+    public void onCreate() {
+        Log.i(JamendoApplication.TAG, "Player Service onCreate");
 
-		};
-		mTelephonyManager.listen(mPhoneStateListener, PhoneStateListener.LISTEN_CALL_STATE);
+        // All necessary Application <-> Service pre-setup goes in here
 
-		mNotificationManager = ( NotificationManager ) getSystemService( NOTIFICATION_SERVICE );
+        mPlayerEngine = new PlayerEngineImpl();
+        mPlayerEngine.setListener(mLocalEngineListener);
 
-		mWifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
-		mWifiLock = mWifiManager.createWifiLock(JamendoApplication.TAG);
-		mWifiLock.setReferenceCounted(false);
-		
-		JamendoApplication.getInstance().setConcretePlayerEngine(mPlayerEngine);
-		mRemoteEngineListener = JamendoApplication.getInstance().fetchPlayerEngineListener();
-	}
-	
-	@Override
-	public void onStart(Intent intent, int startId) {
-		super.onStart(intent, startId);		
-		if(intent == null){
-			return;
-		}
-		
-		String action = intent.getAction();
-		Log.i(JamendoApplication.TAG, "Player Service onStart - "+action);
-		
-		if(action.equals(ACTION_STOP)){
-			stopSelfResult(startId);
-			return;
-		}
-		
-		if(action.equals(ACTION_BIND_LISTENER)){
-			mRemoteEngineListener = JamendoApplication.getInstance().fetchPlayerEngineListener();
-			return;
-		}
-		
-		// we need to have up-to-date playlist if any of play,next,prev buttons is pressed
-		updatePlaylist();
-		
-		if(action.equals(ACTION_PLAY)){	
-			mPlayerEngine.play();
-			return;
-		}
-		
-		if(action.equals(ACTION_NEXT)){	
-			mPlayerEngine.next();
-			return;
-		}
-		
-		if(action.equals(ACTION_PREV)){	
-			mPlayerEngine.prev();
-			return;
-		}
-	}
-	
-	/**
-	 * Fetches a new playlist if its reference address differs from the current one  
-	 */
-	private void updatePlaylist(){
-		if(mPlayerEngine.getPlaylist() != JamendoApplication.getInstance().fetchPlaylist()){
-			mPlayerEngine.openPlaylist(JamendoApplication.getInstance().fetchPlaylist());
-		}
-	}
-	
-	@Override
-	public void onDestroy() {
-		Log.i(JamendoApplication.TAG, "Player Service onDestroy");
-		JamendoApplication.getInstance().setConcretePlayerEngine(null);
-		mPlayerEngine.stop();
-		mPlayerEngine = null;
-		// unregister listener
-		mTelephonyManager.listen(mPhoneStateListener, PhoneStateListener.LISTEN_NONE);
-		super.onDestroy();
-	}
+        mTelephonyManager = (TelephonyManager) this.getSystemService(Context.TELEPHONY_SERVICE);
+        mPhoneStateListener = new PhoneStateListener() {
 
-	/**
-	 * Hint: if necessary this can be extended to ArrayList of listeners in the future, though
-	 * I do not expect that it will be necessary
-	 */
-	private PlayerEngineListener mRemoteEngineListener;
+            @Override
+            public void onCallStateChanged(int state, String incomingNumber) {
+                Log.e(JamendoApplication.TAG, "PlayerService::onCallStateChanged");
+                if (state == TelephonyManager.CALL_STATE_IDLE) {
+                    // resume playback
+                } else {
+                    if (mPlayerEngine != null) {
+                        mPlayerEngine.pause();
+                    }
+                }
+            }
 
-	/**
-	 * Sends notification to the status bar + passes other notifications to remote listeners
-	 */
-	private PlayerEngineListener mLocalEngineListener = new PlayerEngineListener(){
+        };
+        mTelephonyManager.listen(mPhoneStateListener, PhoneStateListener.LISTEN_CALL_STATE);
 
-		@Override
-		public void onTrackBuffering(int percent) {
-			if(mRemoteEngineListener != null){
-				mRemoteEngineListener.onTrackBuffering(percent);
-			}
+        mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
 
-		}
+        mWifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
+        mWifiLock = mWifiManager.createWifiLock(JamendoApplication.TAG);
+        mWifiLock.setReferenceCounted(false);
 
-		@Override
-		public void onTrackChanged(PlaylistEntry playlistEntry) {
-			displayNotifcation(playlistEntry);
-			if(mRemoteEngineListener != null){
-				mRemoteEngineListener.onTrackChanged(playlistEntry);
-			}
-			
-			// Scrobbling
-			boolean scrobblingEnabled = PreferenceManager.getDefaultSharedPreferences(PlayerService.this).getBoolean("scrobbling_enabled", false);
-			if (scrobblingEnabled) {
-				scrobblerMetaChanged();
-			}
-		}
+        JamendoApplication.getInstance().setConcretePlayerEngine(mPlayerEngine);
+        mRemoteEngineListener = JamendoApplication.getInstance().fetchPlayerEngineListener();
+    }
 
-		@Override
-		public void onTrackProgress(int seconds) {
-			if(mRemoteEngineListener != null){
-				mRemoteEngineListener.onTrackProgress(seconds);
-			}
-		}
+    @Override
+    public void onStart(Intent intent, int startId) {
+        super.onStart(intent, startId);
+        if (intent == null) {
+            return;
+        }
 
-		@Override
-		public void onTrackStop() {
-			// allow killing this service
-			// NO-OP setForeground(false);
-			mWifiLock.release();
-			
-			mNotificationManager.cancel(PLAYING_NOTIFY_ID);
-			if(mRemoteEngineListener != null){
-				mRemoteEngineListener.onTrackStop();
-			}
-		}
+        JamendoApplication.getInstance().setConcretePlayerEngine(mPlayerEngine);
+        mRemoteEngineListener = JamendoApplication.getInstance().fetchPlayerEngineListener();
 
-		@Override
-		public boolean onTrackStart() {
-			// prevent killing this service
-			// NO-OP setForeground(true);
-			mWifiLock.acquire();
-			
-			if(mRemoteEngineListener != null){
-				if( !mRemoteEngineListener.onTrackStart() )
-					return false;
-			}
+        String action = intent.getAction();
+        Log.i(JamendoApplication.TAG, "Player Service onStart - " + action);
 
-			boolean wifiOnlyMode = PreferenceManager.getDefaultSharedPreferences(PlayerService.this).getBoolean("wifi_only", false);
+        if (action.equals(ACTION_STOP)) {
+            stopSelfResult(startId);
+            return;
+        }
 
-			// wifi only mode
-			if(wifiOnlyMode && !mWifiManager.isWifiEnabled()){
-				return false;
-			}
+        if (action.equals(ACTION_BIND_LISTENER)) {
+            mRemoteEngineListener = JamendoApplication.getInstance().fetchPlayerEngineListener();
+            return;
+        }
 
-			// roaming protection
-			boolean roamingProtection = PreferenceManager.getDefaultSharedPreferences(PlayerService.this).getBoolean("roaming_protection", true);
-			if(!mWifiManager.isWifiEnabled()){
-				if(roamingProtection && mTelephonyManager.isNetworkRoaming())
-					return false;
-			}
+        // we need to have up-to-date playlist if any of play,next,prev buttons is pressed
+        updatePlaylist();
 
-			return true;
-		}
+        if (action.equals(ACTION_OPENPLAYLIST)) {
+            mPlayerEngine.openPlaylist(JamendoApplication.getInstance().fetchPlaylist());
+            return;
+        }
 
-		@Override
-		public void onTrackPause() {
-			if(mRemoteEngineListener != null){
-				mRemoteEngineListener.onTrackPause();
-			}
-		}
+        if (action.equals(ACTION_PLAY)) {
+            mPlayerEngine.play();
+            return;
+        }
 
-		@Override
-		public void onTrackStreamError() {
-			if(mRemoteEngineListener != null){
-				mRemoteEngineListener.onTrackStreamError();
-			}
-		}
+        if (action.equals(ACTION_NEXT)) {
+            mPlayerEngine.next();
+            return;
+        }
 
-	};
+        if (action.equals(ACTION_PREV)) {
+            mPlayerEngine.prev();
+            return;
+        }
+    }
 
-	/**
-	 * Send changes to selected scrobbling application
-	 */
-	private void scrobblerMetaChanged() {
-		PlaylistEntry entry = mPlayerEngine.getPlaylist().getSelectedTrack();
-		
-		if (entry != null) {
-			String scrobblerApp = PreferenceManager.getDefaultSharedPreferences(PlayerService.this).getString("scrobbler_app", "");
-			assert(scrobblerApp.length() > 0);
-			
-			if (Log.isLoggable(JamendoApplication.TAG, Log.INFO)) {
-				Log.i(JamendoApplication.TAG, "Scrobbling track " + entry.getTrack().getName() + " via " + scrobblerApp);
-			}
-			
-			if (scrobblerApp.equalsIgnoreCase("lastfm")) {
-				Intent i = new Intent(LASTFM_INTENT);
-				i.putExtra("artist", entry.getAlbum().getArtistName());
-				i.putExtra("album", entry.getAlbum().getName());
-				i.putExtra("track", entry.getTrack().getName());
-				i.putExtra("duration", entry.getTrack().getDuration()*1000); // duration in milliseconds
-				sendBroadcast(i);
-			} else if (scrobblerApp.equalsIgnoreCase("simplefm")) {
-				Intent i = new Intent(SIMPLEFM_INTENT);
-				i.putExtra("app-name", getResources().getString(R.string.app_name));
-				i.putExtra("app-package", "com.teleca.jamendo");
-				i.putExtra("state", 0);	// state 0 = START - track has started playing
-				i.putExtra("artist", entry.getAlbum().getArtistName());
-				i.putExtra("track", entry.getTrack().getName());
-				i.putExtra("duration", entry.getTrack().getDuration()); // duration in seconds
-				i.putExtra("album", entry.getAlbum().getName());
-				i.putExtra("track-no", entry.getTrack().getNumAlbum());
-				sendBroadcast(i);
-			} else {
-				// somehow the scrobbling app is not selected properly
-			}
-		}
-	}
+    /**
+     * Fetches a new playlist if its reference address differs from the current one
+     */
+    private void updatePlaylist() {
+        if (mPlayerEngine.getPlaylist() != JamendoApplication.getInstance().fetchPlaylist()) {
+            mPlayerEngine.openPlaylist(JamendoApplication.getInstance().fetchPlaylist());
+        }
+    }
 
-	private void displayNotifcation(PlaylistEntry playlistEntry)
-	{
+    @Override
+    public void onDestroy() {
+        Log.i(JamendoApplication.TAG, "Player Service onDestroy");
+        JamendoApplication.getInstance().setConcretePlayerEngine(null);
+        mPlayerEngine.stop();
+        mPlayerEngine = null;
+        // unregister listener
+        mTelephonyManager.listen(mPhoneStateListener, PhoneStateListener.LISTEN_NONE);
+        super.onDestroy();
+    }
 
-		String notificationMessage = playlistEntry.getTrack().getName() + " - " + playlistEntry.getAlbum().getArtistName();
+    /**
+     * Hint: if necessary this can be extended to ArrayList of listeners in the future, though I do not expect that it
+     * will be necessary
+     */
+    private PlayerEngineListener mRemoteEngineListener;
 
-		Notification notification = new Notification(
-				R.drawable.stat_notify, notificationMessage, System.currentTimeMillis() );
+    /**
+     * Sends notification to the status bar + passes other notifications to remote listeners
+     */
+    private PlayerEngineListener mLocalEngineListener = new PlayerEngineListener() {
 
-		PendingIntent contentIntent = PendingIntent.getActivity( this, 0,
-				new Intent( this, PlayerActivity.class ), 0);
+        @Override
+        public void onTrackBuffering(int percent) {
+            if (mRemoteEngineListener != null) {
+                mRemoteEngineListener.onTrackBuffering(percent);
+            }
 
-		notification.setLatestEventInfo( this, "Jamendo Player",
-				notificationMessage, contentIntent );
-		notification.flags |= Notification.FLAG_ONGOING_EVENT;
+        }
 
-		mNotificationManager.notify( PLAYING_NOTIFY_ID, notification );
-	}
+        @Override
+        public void onTrackChanged(PlaylistEntry playlistEntry) {
+            displayNotifcation(playlistEntry);
+            if (mRemoteEngineListener != null) {
+                mRemoteEngineListener.onTrackChanged(playlistEntry);
+            }
+
+            // Scrobbling
+            boolean scrobblingEnabled = PreferenceManager.getDefaultSharedPreferences(PlayerService.this).getBoolean(
+                    "scrobbling_enabled", false);
+            if (scrobblingEnabled) {
+                scrobblerMetaChanged();
+            }
+        }
+
+        @Override
+        public void onTrackProgress(int seconds) {
+            if (mRemoteEngineListener != null) {
+                mRemoteEngineListener.onTrackProgress(seconds);
+            }
+        }
+
+        @Override
+        public void onTrackStop() {
+            // allow killing this service
+            // NO-OP setForeground(false);
+            mWifiLock.release();
+
+            mNotificationManager.cancel(PLAYING_NOTIFY_ID);
+            if (mRemoteEngineListener != null) {
+                mRemoteEngineListener.onTrackStop();
+            }
+        }
+
+        @Override
+        public boolean onTrackStart() {
+            // prevent killing this service
+            // NO-OP setForeground(true);
+            mWifiLock.acquire();
+
+            if (mRemoteEngineListener != null) {
+                if (!mRemoteEngineListener.onTrackStart())
+                    return false;
+            }
+
+            boolean wifiOnlyMode = PreferenceManager.getDefaultSharedPreferences(PlayerService.this).getBoolean(
+                    "wifi_only", false);
+
+            // wifi only mode
+            if (wifiOnlyMode && !mWifiManager.isWifiEnabled()) {
+                return false;
+            }
+
+            // roaming protection
+            boolean roamingProtection = PreferenceManager.getDefaultSharedPreferences(PlayerService.this).getBoolean(
+                    "roaming_protection", true);
+            if (!mWifiManager.isWifiEnabled()) {
+                if (roamingProtection && mTelephonyManager.isNetworkRoaming())
+                    return false;
+            }
+
+            return true;
+        }
+
+        @Override
+        public void onTrackPause() {
+            if (mRemoteEngineListener != null) {
+                mRemoteEngineListener.onTrackPause();
+            }
+        }
+
+        @Override
+        public void onTrackStreamError() {
+            if (mRemoteEngineListener != null) {
+                mRemoteEngineListener.onTrackStreamError();
+            }
+        }
+
+    };
+
+    /**
+     * Send changes to selected scrobbling application
+     */
+    private void scrobblerMetaChanged() {
+        PlaylistEntry entry = mPlayerEngine.getPlaylist().getSelectedTrack();
+
+        if (entry != null) {
+            String scrobblerApp = PreferenceManager.getDefaultSharedPreferences(PlayerService.this).getString(
+                    "scrobbler_app", "");
+            assert (scrobblerApp.length() > 0);
+
+            if (Log.isLoggable(JamendoApplication.TAG, Log.INFO)) {
+                Log.i(JamendoApplication.TAG, "Scrobbling track " + entry.getTrack().getName() + " via " + scrobblerApp);
+            }
+
+            if (scrobblerApp.equalsIgnoreCase("lastfm")) {
+                Intent i = new Intent(LASTFM_INTENT);
+                i.putExtra("artist", entry.getAlbum().getArtistName());
+                i.putExtra("album", entry.getAlbum().getName());
+                i.putExtra("track", entry.getTrack().getName());
+                i.putExtra("duration", entry.getTrack().getDuration() * 1000); // duration in milliseconds
+                sendBroadcast(i);
+            } else if (scrobblerApp.equalsIgnoreCase("simplefm")) {
+                Intent i = new Intent(SIMPLEFM_INTENT);
+                i.putExtra("app-name", getResources().getString(R.string.app_name));
+                i.putExtra("app-package", "com.teleca.jamendo");
+                i.putExtra("state", 0); // state 0 = START - track has started playing
+                i.putExtra("artist", entry.getAlbum().getArtistName());
+                i.putExtra("track", entry.getTrack().getName());
+                i.putExtra("duration", entry.getTrack().getDuration()); // duration in seconds
+                i.putExtra("album", entry.getAlbum().getName());
+                i.putExtra("track-no", entry.getTrack().getNumAlbum());
+                sendBroadcast(i);
+            } else {
+                // somehow the scrobbling app is not selected properly
+            }
+        }
+    }
+
+    private void displayNotifcation(PlaylistEntry playlistEntry) {
+
+        String notificationMessage = playlistEntry.getTrack().getName() + " - "
+                + playlistEntry.getAlbum().getArtistName();
+
+        Notification notification = new Notification(R.drawable.stat_notify, notificationMessage,
+                System.currentTimeMillis());
+
+        PendingIntent contentIntent = PendingIntent.getActivity(this, 0, new Intent(this, PlayerActivity.class), 0);
+
+        notification.setLatestEventInfo(this, "Jamendo Player", notificationMessage, contentIntent);
+        notification.flags |= Notification.FLAG_ONGOING_EVENT;
+
+        mNotificationManager.notify(PLAYING_NOTIFY_ID, notification);
+    }
 
 }
